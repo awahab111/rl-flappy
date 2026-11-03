@@ -1,47 +1,47 @@
 # rl-flappy
 
-A bird, some pipes, and a table of 6,000 numbers that learns to fly through them.
-No neural network. It trains on one core in 45 seconds.
+A bird flies through pipes. A table of 6,000 numbers decides when the bird flaps.
+There is no neural network. Training runs on one core in 45 seconds.
 
-The project exists in two versions. `python/` is the readable one, and the one the
-videos come from. `rust/` is the same game and the same learner, with no dependencies
-and about 250 times the speed.
+The project exists in two versions. `python/` is the readable one, and the videos come
+from it. `rust/` holds the same game and the same learner, with no dependencies. It
+runs about 250 times faster.
 
 [![The flock in the final round](videos/preview.gif)](videos/rl_flappy_rounds_1080.mp4)
 
-That preview plays on the page. Click it for the full clip at 1080p. The 4K master is
-`videos/rl_flappy_rounds_4k.mp4` (3840x2160, 7 MB). GitHub and some browser players
-refuse that file, so download it and open it locally if the player stays black.
+The preview plays on the page. Click it to open the full clip at 1080p. The 4K master
+is `videos/rl_flappy_rounds_4k.mp4` (3840x2160, 7 MB). GitHub and some browsers refuse
+that file. Download it and open it locally if the player stays black.
 
 ## Start here
 
-You need Python 3.10 or newer, plus numpy and Pillow. ffmpeg is only needed if you
-want to render video.
+You need Python 3.10 or newer, numpy, and Pillow. You need ffmpeg only for video.
 
 ```bash
 cd python
 pip install numpy pillow
 ```
 
-Then run these three, in this order, from inside `python/`.
+Run these three commands in this order.
 
 ```bash
 python3 test_env.py     # 2 seconds. Checks the game and the rules.
-python3 train.py        # 45 seconds. Builds the table from scratch.
-python3 watch.py        # Watch the trained bird fly in your terminal.
+python3 train.py        # 45 seconds. Builds the table from zero.
+python3 watch.py        # Shows the trained bird in your terminal.
 ```
 
-Every Python command in this README assumes you are in `python/`. The Rust commands
-assume `rust/`.
+Every Python command in this README runs inside `python/`. Every Rust command runs
+inside `rust/`.
 
-What you should see:
+What you see:
 
-1. `test_env.py` prints 11 lines that start with `ok`, then `all checks passed`.
-2. `train.py` prints a progress line every 2,000 lives, then a summary block.
+1. `test_env.py` prints 11 lines that start with `ok`. The last line says
+   `all checks passed`.
+2. `train.py` prints a progress line every 2,000 lives. Then it prints a summary.
 3. `watch.py` clears the screen and draws the game in ASCII at 30 frames per second.
 
-If `watch.py` says a file is missing, run `train.py` first. It writes
-`q_table.json` in the same folder.
+If `watch.py` says a file is missing, run `train.py` first. It writes `q_table.json`
+in the same folder.
 
 ## What each file does
 
@@ -49,19 +49,19 @@ If `watch.py` says a file is missing, run `train.py` first. It writes
 |---|---|---|
 | `python/env.py` | The game. Gravity, pipes, collisions, and the four numbers the bird sees. | You want to change the difficulty. |
 | `python/agent.py` | The table of scores and the rule that improves it. | You want to change how fast it learns. |
-| `python/train.py` | Runs 20,000 lives, saves checkpoints, measures the result, draws the curve. | You want more training or a new level set. |
+| `python/train.py` | Runs 20,000 lives, saves checkpoints, measures the result, draws the curve. | You want more training or a new set of levels. |
 | `python/watch.py` | Plays a saved table in the terminal, in ASCII. | You want to check a checkpoint in two seconds. |
 | `python/render.py` | Four checkpoints side by side, as video. | You want the short comparison clip. |
 | `python/swarm.py` | 100 checkpoints on one level, with a stats panel. | You want the wide overview clip. |
 | `python/rounds.py` | One checkpoint per round, ending at pipe 50. | You want the 4K clip. |
-| `python/draw.py` | Shared drawing helpers and font loading. | You want different colours or type. |
+| `python/draw.py` | Drawing helpers and font loading. | You want different colours or type. |
 | `python/test_env.py` | 11 checks on the rules of the game. | After you edit `env.py`. |
-| `python/parity_trace.py` | Prints the same 400 frames as `rust/`, for a diff. | After you edit the physics on either side. |
-| `rust/src/env.rs` | The same game, constant for constant. | Same reasons as `env.py`. |
+| `python/parity_trace.py` | Prints the same 400 frames as the Rust game. | After you edit the physics on either side. |
+| `rust/src/env.rs` | The same game, with the same constants. | Same reasons as `env.py`. |
 | `rust/src/agent.rs` | The same table, in one flat `Vec<f64>`. | You want to see the index arithmetic. |
 | `rust/src/main.rs` | Training loop, evaluation, and the JSON writer. | You want the speed comparison. |
 
-The data flows one way:
+The data moves one way:
 
 ```
 env.py  ->  train.py  ->  q_table.json  ->  watch.py
@@ -71,18 +71,20 @@ env.py  ->  train.py  ->  q_table.json  ->  watch.py
 
 ## How training works
 
-`python3 train.py` does six things, in this order.
+`python3 train.py` does six steps.
 
-1. Builds the game and an empty table of 6,000 zeros.
-2. Runs 20,000 lives. A life ends when the bird dies or reaches the step cap.
-3. Starts each life on a new level, generated from the seed.
-4. Learns from every step. The mechanics are below.
-5. Saves a checkpoint every N lives, if you ask for it.
-6. Stops exploring after 8,000 lives. The remaining 12,000 only refine the scores.
+1. It builds the game and an empty table of 6,000 zeros.
+2. It runs 20,000 lives. A life ends when the bird dies or reaches the step cap.
+3. It starts each life on a new level from the seed.
+4. It learns from every step. The next section shows the rule.
+5. It saves a checkpoint every N lives if you ask for one.
+6. It stops exploring after 8,000 lives. The other 12,000 lives only refine scores.
+
+The trainer calls one life an episode. The output uses both words.
 
 ### What the state is
 
-Four numbers, each rounded into a bucket. The bird sees nothing else.
+The bird sees four numbers. Each number falls into a bucket.
 
 | number | buckets | what it measures |
 |---|---|---|
@@ -91,62 +93,59 @@ Four numbers, each rounded into a bucket. The bird sees nothing else.
 | speed | 5 | rising, level, or falling, and how fast |
 | height | 10 | how high the bird is on the screen |
 
-Six times ten times five times ten is 3,000 states. Each state gets two scores, one
-per button. The bird presses the button with the higher score. That is the whole
-policy.
+Six times ten times five times ten is 3,000 states. Each state has two scores, one for
+each action. The bird chooses the action with the higher score. That is the policy.
 
-The height number looks redundant next to the offset. It is not. Without it, "safe in
-a low gap" and "one pixel from the ceiling" land in the same bucket, and the bird
-flies into a wall it cannot see.
+The height looks redundant next to the offset. It is not. Without height, a bird that
+is safe in a low gap and a bird one pixel from the ceiling share a bucket. The bird
+then flies into a wall that it cannot see.
 
 ### What one step does to the table
 
-Every step runs the same five moves. They live in `update`, in `agent.py`.
+Each step runs five moves in `update`, inside `agent.py`.
 
-1. Read the state. Four numbers, so one row of the table.
-2. Press a button. Take the score in that row for that button.
-3. Take the reward. 0.1 for staying alive, 5 for a pipe, minus 10 for dying.
-4. Build the target. That reward, plus 0.95 times the best score in the next state.
-5. Move the score a fraction of the way to the target. The fraction is 0.20.
+1. Read the state. Four numbers give one row of the table.
+2. Choose an action. Read the score for that action in the row.
+3. Read the reward. 0.1 for survival, 5 for a pipe, minus 10 for death.
+4. Build the target. Add the reward to 0.95 times the best score in the next state.
+5. Move the score a fraction toward the target. The fraction is 0.20.
 
 ```
 target = reward + 0.95 * best_score_of_next_state
 score  = score + 0.20 * (target - score)
 ```
 
-A real update, on a fresh table. The bird sits in state `(5, 1, 2, 4)`, presses flap,
-stays alive, and the next state is worth nothing yet:
+Here is a real update on a fresh table. The bird is in state `(5, 1, 2, 4)`. It flaps
+and stays alive. The next state still holds zero.
 
 ```
 target = 0.10 + 0.95 * 0.00 = 0.10
 score  = 0.00 + 0.20 * (0.10 - 0.00) = 0.02
 ```
 
-The same row, visited four times in a row, with the values the training run printed:
+The training run printed the same row after four visits:
 
 ```
 0.000  ->  0.020  ->  0.036  ->  0.052
 ```
 
-Each visit adds less than the one before, because the target moves as the score
-catches up. That is the shape of the whole thing: one row at a time, creeping toward
-the truth.
+Each visit adds less than the visit before. The target moves as the score catches up.
+The table improves one row at a time.
 
-The death step is where the table learns caution. That step pays 0.1 minus 10, and
-there is no next state to imagine:
+The death step teaches caution. It pays 0.1 minus 10. There is no next state.
 
 ```
 target = -9.90
 score  = 0.00 + 0.20 * (-9.90 - 0.00) = -1.98
 ```
 
-Now the row carries a strongly negative number and the bird stops picking it. The
-worst score in the shipped table is -9.85, at a state one step from the ground.
+The row now holds a large negative number. The bird stops choosing it. The worst score
+in the shipped table is -9.85. That row sits one step from the ground.
 
 ### What the table looks like after training
 
-These are real rows from `q_table.json`. The four numbers are distance, offset,
-speed, and height.
+These rows come from `q_table.json`. The four numbers are distance, offset, speed, and
+height.
 
 | row | coast | flap | bird presses |
 |---|---|---|---|
@@ -155,42 +154,41 @@ speed, and height.
 | `(2, 5, 3, 5)` | 0.00 | +3.50 | flap |
 | `(0, 4, 2, 4)` | +5.41 | +2.68 | coast |
 
-A score is a sum of discounted future reward. Living alone tops out near 2.0, since
-one step pays 0.1 and every step of delay multiplies by 0.95. Anything above 2.0 came
-from pipes. Anything negative means the bird expects to die soon.
+A score is the sum of future reward, reduced by distance. Survival alone reaches about
+2.0. One step pays 0.1. Each step of delay multiplies by 0.95. A score above 2.0 came
+from pipes. A negative score means the bird expects to die soon.
 
-Of the 3,000 rows, this run touched 1,061. 740 rows tell the bird to coast, 319 tell
-it to flap, and 1,941 are still all zeros because the bird never visited them. A zero
-row gives both buttons the same score, and the tie break in `greedy` presses flap.
+This run touched 1,061 of the 3,000 rows. 740 rows tell the bird to coast. 319 rows
+tell it to flap. 1,941 rows stay at zero because the bird never visited them. A zero
+row gives both actions the same score. The tie break in `greedy` chooses flap.
 
 ### Why the curve is flat, then steep
 
-The bird must reach a state before the table can learn anything about it. For the
-first 6,000 lives it cannot clear the first gap, so every row past that gap stays at
-zero and nothing downstream can improve.
+The table can learn about a state only after the bird reaches it. For the first 6,000
+lives the bird cannot clear the first gap. Every row after that gap stays at zero.
+Nothing downstream can improve.
 
-Once the bird clears the first gap most of the time, the rows past it start to fill.
-That lets it clear the second gap, and so on. This is why almost all of the
-improvement lands between 7,000 and 10,000 lives. It is not a slow grind. It is a door
-opening.
+After 6,000 lives the bird clears the first gap most of the time. The rows after it
+start to fill. The bird can then clear the second gap. The same effect repeats. Almost
+all of the improvement lands between 7,000 and 10,000 lives. The change is sudden, not
+gradual.
 
 ### How much work that is
 
-2.78 million updates over 20,000 lives, at 139 steps per life on average. One core,
-45 seconds. A little over a thousand of the 6,000 numbers end up doing the work.
+The run makes 2.78 million updates over 20,000 lives. A life averages 139 steps. One
+core takes 45 seconds. About a thousand of the 6,000 numbers do the work.
 
-Exploration is what gets the bird to that door. For the first 8,000 lives it presses a
-random button a large share of the time, which is how it discovers that flying up
-exists. After that the share drops to 2 percent, one random press in fifty. That 2
-percent is also why the training average stays low, since one random flap in a long
-run ends it.
+Exploration gets the bird to the first gap. For the first 8,000 lives it chooses a
+random action often. That is how it finds that flying up is possible. After that the
+rate drops to 2 percent, one random action in fifty. The same 2 percent keeps the
+training average low. One random flap ends a long life.
 
 ### Why those reward sizes
 
-Staying alive pays 0.1. A pipe pays 5, which is 50 steps of hovering. Dying costs 10,
-which is 100 steps. The sizes are not decoration: a fresh table starts at zero, so if
-dying paid anything at all, crashing would look better than an untried button. It did,
-for 40,000 lives, until the death penalty was added.
+Survival pays 0.1. A pipe pays 5, which equals 50 steps of hovering. Death costs 10,
+which equals 100 steps. The sizes matter. A fresh table starts at zero. If death paid
+anything at all, crashing would look better than an untried action. It did, for 40,000
+lives, until the death penalty arrived.
 
 ### What training prints
 
@@ -209,46 +207,45 @@ state space        : 3000 states, 6000 Q values, 1061 states ever visited
 train time         : 45.1s
 ```
 
-The progress line says four things. `eps` is how much guessing is left. `mean pipes`
-is the average, including the guessing. `best` is the best single life so far. The
-seconds are elapsed time. Do not worry when `mean pipes` sits at 0.00 for the first
-few thousand lives. That is normal.
+The progress line shows four things. `eps` is the share of random actions that
+remains. `mean pipes` is the average, including random actions. `best` is the best
+single life. The last number is elapsed time. Do not worry when `mean pipes` stays at
+0.00 for a few thousand lives. That is normal.
 
-The summary is the part that matters. `last 100 episodes` stays low because of the 2
-percent guessing. `greedy eval` is the real score: the policy with no guessing, on 20
-levels it never trained on.
+The summary matters more. `last 100 episodes` stays low because of the 2 percent. The
+`greedy eval` line is the real score. It uses no random action, on 20 levels that the
+bird never saw.
 
 ### The knobs
 
 | flag | default | what it does |
 |---|---|---|
 | `--episodes` | 20000 | How many lives to run. 20,000 is enough. 5,000 is not. |
-| `--seed` | 23 | Changes the level sequence. Same seed gives the same result. |
-| `--alpha` | 0.20 | How far each score moves per step. Higher learns faster and jitters more. |
-| `--gamma` | 0.95 | How much the future counts. Lower makes the bird short sighted. |
+| `--seed` | 23 | Changes the level sequence. The same seed gives the same result. |
+| `--alpha` | 0.20 | How far each score moves per step. A higher value learns faster and jitters more. |
+| `--gamma` | 0.95 | How much the future counts. A lower value makes the bird short sighted. |
 | `--snap-every` | 0 | Save a checkpoint every N lives. The video scripts need this. |
-| `--snap-marks` | 0.40,0.70 | Extra checkpoints at specific lives, or as a fraction. |
+| `--snap-marks` | 0.40,0.70 | Extra checkpoints at set lives, or as a fraction. |
 | `--out` | script folder | Where to write the four output files. |
 
-Training uses one core. More cores do not make it faster, because there is one bird
-and it dies constantly.
+Training uses one core. More cores do not help, because one bird flies at a time.
 
 ## What training writes
 
 | file | size | what it is |
 |---|---|---|
-| `q_table.json` | 65 KB | The table. 6,000 numbers as nested lists. This is the agent. |
+| `q_table.json` | 65 KB | The table. 6,000 numbers as nested lists. This file is the agent. |
 | `snapshots/ep_XXXXX.json` | 65 KB each | The same table, saved part way through the run. Only written with `--snap-every`. |
-| `stats.json` | 230 KB | Every number from the run, plus the per life history. |
+| `stats.json` | 230 KB | Every number from the run, plus the history of each life. |
 | `learning_curve.png` | 25 KB | The picture. A thin line per life, a thick average line. |
 
-The table is plain JSON on purpose. You can open it, diff two of them, or copy one
-checkpoint somewhere else. There is no model file and no build step.
+The table is plain JSON on purpose. You can open it, compare two files, or copy a
+checkpoint. There is no model file and no build step.
 
 ## Using a trained table
 
 `watch.py` plays a table in the terminal. By default it reads `q_table.json` from the
-folder the script sits in.
+folder of the script.
 
 ```bash
 python3 watch.py                                # the trained table, until it dies
@@ -258,12 +255,12 @@ python3 watch.py --fps 60                       # faster playback
 python3 watch.py --q snapshots/ep_08000.json    # a checkpoint, see below
 ```
 
-The last one is the useful one, but it needs checkpoints on disk. Run `train.py
---snap-every 100` once (45 seconds), then point `--q` at `ep_00000`, `ep_08000`,
-`ep_12000` and `ep_20000` and watch the bird learn in about ten seconds total, with no
-rendering at all.
+The last command is the useful one. It needs checkpoints on disk. Run `train.py
+--snap-every 100` once (45 seconds). Then point `--q` at `ep_00000`, `ep_08000`,
+`ep_12000`, and `ep_20000`. You then see the bird learn in about ten seconds, with no
+video render.
 
-To use a table from your own script:
+To use a table in your own script:
 
 ```python
 from agent import QAgent
@@ -279,20 +276,19 @@ while True:
 print(env.pipes_passed, env.death_reason)
 ```
 
-`agent.greedy(state)` never guesses. `agent.act(state, epsilon)` guesses, and belongs
-in training only.
+`agent.greedy(state)` never guesses. `agent.act(state, epsilon)` guesses. Use it in
+training only.
 
 ## Making the videos
 
-All three renderers replay checkpoints, so train with checkpoints first.
+The three video scripts replay checkpoints. Train with checkpoints first.
 
 ```bash
 python3 train.py --snap-every 100        # 201 checkpoints, one every 100 lives
 ```
 
-A render takes between 15 seconds and 4 minutes. Every renderer has `--dry-run`,
-which prints the outcome of each run and the frame count without encoding. Use it
-first.
+A render takes 15 seconds to 4 minutes. Every script has `--dry-run`. It prints the
+result of each run and the frame count, and it does not encode. Use it first.
 
 | command | output | time |
 |---|---|---|
@@ -301,22 +297,22 @@ first.
 | `python3 rounds.py` | round robin, 4K at 60fps, 37s | 3m40s |
 | `python3 rounds.py --height 1080` | the same clip at 1080p, for drafts | 90s |
 
-Useful flags on `rounds.py`: `--target 50` is the pipe that ends the tape, `--group
-12` is birds per round, `--schedule 0,2000,8000,10000` picks which checkpoints to
-try, and `--seed` picks the level.
+`rounds.py` takes useful flags. `--target 50` sets the pipe that ends the video.
+`--group 12` sets the birds per round. `--schedule 0,2000,8000,10000` sets the
+checkpoints. `--seed` sets the level.
 
-The 4K file is heavy enough that some players refuse it. `videos/rl_flappy_rounds_1080.mp4`
-is the same run scaled to 1080p, and that one plays in a browser. If you render your
-own, `--height 1080` gives the small version directly, in about 90 seconds.
+The 4K file is heavy, and some players refuse it. `videos/rl_flappy_rounds_1080.mp4`
+is the same run at 1080p, and a browser can play that one. A fresh render with
+`--height 1080` gives the small version in about 90 seconds.
 
 `swarm.py` needs at least as many checkpoints as birds. `rounds.py` needs the
-checkpoints in its schedule, which defaults to every 2,000 lives up to 12,000.
+checkpoints in its schedule. The default schedule is every 2,000 lives up to 12,000.
 
 ## The same agent in Rust
 
-`rust/` is the same game and the same learner, ported with no dependencies at all.
-It trains the identical 20,000 lives in 0.16 seconds instead of 42, and writes a
-table the Python tools load without changes.
+`rust/` holds the same game and the same learner. It has no dependencies. It trains
+the same 20,000 lives in 0.16 seconds, not 42. It writes a table that the Python tools
+load without changes.
 
 | | Python | Rust |
 |---|---|---|
@@ -325,19 +321,19 @@ table the Python tools load without changes.
 | table | numpy array | `Vec<f64>` |
 | dependencies | numpy, Pillow | none |
 
-The Rust game is the same game, not a lookalike. `--trace 400` prints four hundred
-frames, and `python/parity_trace.py` prints the same four hundred from the Python
-side. The two files are identical to twelve decimal places.
+The Rust game is the same game. `--trace 400` prints 400 frames.
+`python/parity_trace.py` prints the same 400 frames from the Python side. The two
+files match to twelve decimal places.
 
-Scores still differ between the two, and that is the levels, not the code. Each
-version has its own random generator, so the same seed builds different pipes. Fly
-the same table through the same levels and the results match level for level.
+The scores still differ, and the levels cause that. Each version has its own random
+generator. The same seed builds different pipes. Fly the same table through the same
+levels, and the results match level for level.
 
-That is the argument for the port. Across 100 seeds the Rust trainer reaches 71 pipes
-on 8 of them, with a median of 60.5. The sweep takes 19 seconds. In Python it would
-take 70 minutes. One run tells you whether a seed was lucky. A hundred tell you what
-the trainer usually does, and which table to keep. `rust/README.md` has the design
-notes and the crate choices for a problem that does not fit in a table.
+That is the argument for the port. Across 100 seeds, the Rust trainer reaches 71 pipes
+on 8 seeds. The median is 60.5. The sweep takes 19 seconds. In Python it would take 70
+minutes. One run tells you if a seed was lucky. A hundred runs tell you what the
+trainer usually does. `rust/README.md` has the design notes and the crate choices for
+a larger problem.
 
 ## Changing the game
 
@@ -351,17 +347,18 @@ The difficulty lives in `python/env.py`, as constants near the top.
 | `GRAVITY` | 0.40 | Heavier gravity makes every flap matter more. |
 | `FLAP_V` | -3.2 | A stronger flap overshoots narrow gaps. |
 
-If you change any of these, retrain. An old table still loads, but it expects the old
+Retrain after you change a constant. An old table still loads, but it expects the old
 physics.
 
-The bucket edges in the same file decide the size of the table. If you change them,
-the table changes shape and old checkpoints will not load. The reward sizes live
-there too, and they decide what the bird cares about.
+The bucket edges in the same file set the table size. A change to the edges changes
+the table shape. Old checkpoints then fail to load. The reward sizes live there too.
+They set what the bird cares about.
 
 ### More buckets, or more training?
 
-Both, but the buckets cost more than most people expect. These are measured numbers,
-not estimates. Same seed, same twenty test levels, only the bucket counts changed.
+Both, but buckets cost more than most people expect. These numbers are measured, not
+estimated. The seed and the 20 test levels stay the same. Only the bucket counts
+change.
 
 | buckets (distance, offset, speed, height) | cells | updates per visited cell | pipes per run | train time |
 |---|---|---|---|---|
@@ -369,32 +366,32 @@ not estimates. Same seed, same twenty test levels, only the bucket counts change
 | 6, 19, 5, 19 | 10,830 | 200 | 32.7 | 38s |
 | 6, 37, 5, 37 | 41,070 | 37 | 7.1 | 27s |
 
-At a fixed budget, more buckets make the bird much worse. The middle column is the
-reason. A cell that sees 37 updates never settles on a number, so the bird acts on
+At a fixed budget, more buckets make the bird much worse. The middle column explains
+why. A cell that sees 37 updates never settles on a number. The bird then acts on
 noise.
 
-Paying for it works, up to a point. The 10,830 cell table trained for 100,000 lives
-reaches 71.0 again, in 4m34s instead of 45s. It catches up but does not overtake,
-because the small table already flies until the step cap.
+More training can pay for the buckets, up to a point. The 10,830 cell table trained
+for 100,000 lives reaches 71.0 again. It takes 4m34s, not 45s. It catches up but does
+not overtake, because the small table already flies to the step cap.
 
-Flown past the cap, on eight fresh levels with a 60,000 step limit:
+Here is the same comparison past the cap, on eight new levels with a 60,000 step
+limit.
 
 | table | cells | train time | mean pipes | runs that hit the cap |
 |---|---|---|---|---|
 | small | 3,000 | 45s | 1,707.6 | 7 of 8 |
 | fine | 10,830 | 274s | 1,722.8 | 7 of 8 |
 
-That gap is noise, and it cost six times the compute.
+That gap is noise. It cost six times the compute.
 
-A table does not generalise. Every cell learns alone, so bucket 4 and bucket 5 are
-strangers even though they are one pixel apart. Adding buckets does not add knowledge.
-It splits the same experience into more drawers.
+A table does not generalise. Every cell learns alone. Bucket 4 and bucket 5 are
+strangers, although they are one pixel apart. More buckets do not add knowledge. They
+split the same experience into more drawers.
 
 Resolution pays when the task is hard enough that the small table fails. Narrow the
-gaps or speed up the pipes and the fine table has room to be better. The other fix is
-to stop treating cells as independent, with tile coding or any function approximation,
-so one update improves several nearby cells at once.
-
+gaps or speed up the pipes. The fine table then has room to be better. The other fix
+is to share learning between cells. Tile coding and function approximation do that.
+One update then improves several nearby cells.
 
 ## Files in the repo
 
@@ -424,5 +421,5 @@ videos/             three clips, a 1080p copy, and a preview GIF
 ```
 
 `python/snapshots/` is not in the repo. It holds 201 checkpoints, which is 12 MB of
-generated JSON. `python3 train.py --snap-every 100` rebuilds it exactly, because
-training uses a fixed seed and produces the same table every time.
+generated JSON. `python3 train.py --snap-every 100` rebuilds it exactly. Training uses
+a fixed seed, so it produces the same table every time.
