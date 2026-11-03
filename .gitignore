@@ -12,3 +12,6 @@ venv/
 # render scratch
 *.tmp
 out/
+
+# generated checkpoints. Rebuild with: python3 train.py --snap-every 100
+snapshots/

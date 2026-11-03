@@ -226,7 +226,7 @@ and it dies constantly.
 | file | size | what it is |
 |---|---|---|
 | `q_table.json` | 65 KB | The table. 6,000 numbers as nested lists. This is the agent. |
-| `snapshots/ep_XXXXX.json` | 65 KB each | The same table, saved part way through the run. |
+| `snapshots/ep_XXXXX.json` | 65 KB each | The same table, saved part way through the run. Only written with `--snap-every`. |
 | `stats.json` | 230 KB | Every number from the run, plus the per life history. |
 | `learning_curve.png` | 25 KB | The picture. A thin line per life, a thick average line. |
 
@@ -243,12 +243,13 @@ python3 watch.py                                # the trained table, until it di
 python3 watch.py --seed 99                      # a level it has never seen
 python3 watch.py --steps 200                    # stop after 200 frames
 python3 watch.py --fps 60                       # faster playback
-python3 watch.py --q snapshots/ep_08000.json    # a mid training checkpoint
+python3 watch.py --q snapshots/ep_08000.json    # a checkpoint, see below
 ```
 
-The last one is the useful one. Run it against `ep_00000`, `ep_08000`, `ep_12000`
-and `ep_20000` and you can watch the bird learn, in about ten seconds total, without
-rendering anything.
+The last one is the useful one, but it needs checkpoints on disk. Run `train.py
+--snap-every 100` once (45 seconds), then point `--q` at `ep_00000`, `ep_08000`,
+`ep_12000` and `ep_20000` and watch the bird learn in about ten seconds total, with no
+rendering at all.
 
 To use a table from your own script:
 
@@ -369,8 +370,12 @@ rounds.py      round robin 4K video
 draw.py        drawing helpers and fonts
 test_env.py    11 checks on the game rules
 q_table.json   the trained table
-snapshots/     201 checkpoints, one every 100 lives
 stats.json     every number in this README
+learning_curve.png  the picture
 videos/        three clips, a 1080p copy, and a preview GIF
-assets/fonts/  Space Grotesk and Inter, used by the renderers
+assets/fonts/  Space Grotesk, used by the renderers
 ```
+
+`snapshots/` is not in the repo. It holds 201 checkpoints, which is 12 MB of generated
+JSON. `python3 train.py --snap-every 100` rebuilds it exactly, because training uses a
+fixed seed and produces the same table every time.

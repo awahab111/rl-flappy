@@ -29,8 +29,6 @@ BRAND_FONTS = {
              "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
     "medium": (os.path.join(HERE, "assets", "fonts", "SpaceGrotesk-Medium.ttf"),
                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-    "heavy": (os.path.join(HERE, "assets", "fonts", "Inter-ExtraBold.ttf"),
-              "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
 }
 
 SKY_TOP = (124, 197, 214)
