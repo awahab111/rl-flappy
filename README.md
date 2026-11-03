@@ -1,328 +1,395 @@
 # rl-flappy
 
-A flappy-bird-shaped toy where a **table of 6,000 numbers** learns to fly. No neural
-nets, no gym, no PyTorch. numpy does the maths, Pillow draws the frames, ffmpeg
-encodes them.
+A bird, some pipes, and a table of 6,000 numbers that learns to fly through them.
+No neural network. It trains on one core in 45 seconds.
 
-The point is to make the learning process watchable. Three videos in `videos/` show
-the same agent at different stages: four checkpoints side by side, a hundred
-checkpoints on one level, and a round-robin where each checkpoint gets a fresh group
-of birds until one of them clears 50 pipes.
+[![The last round of the 4K cut](videos/poster_rounds.png)](videos/rl_flappy_rounds_4k.mp4)
 
-Measured on one core: it trains in **45 seconds**, then clears **71 pipes per run on
-20 worlds it never saw** (every one hitting the step cap), and **241 pipes** on a
-long horizon.
+## Start here
 
-![learning curve](learning_curve.png)
-
-The curve is flat for about 6,000 episodes, then falls off a cliff between 7,000 and
-10,000: the checkpoint at 7,500 clears one pipe, the one at 8,000 clears seven, and
-by 10,000 it never dies. Everything interesting in the videos happens inside that
-window, which is why the checkpoint schedule is dense there.
-
-## Results
-
-Seed 23, 20,000 episodes, 45.1 seconds of one CPU core:
-
-| | pipes per run |
-|---|---|
-| episodes 1 to 100 | 0.00 |
-| last 100 episodes (with 2% random actions still on) | 6.80 |
-| greedy, 20 worlds it never saw | **71.00** (every run hit the step cap) |
-| greedy, long horizon, 8,000 step cap | 241 on all 5 worlds |
-| best single training run | 67 |
-| state-action values ever touched | 1,061 of 6,000 |
-
-## Quickstart
+You need Python 3.10 or newer, plus numpy and Pillow. ffmpeg is only needed if you
+want to render video.
 
 ```bash
-python3 train.py                      # 20k episodes, writes q_table.json + stats + curve
-python3 watch.py                      # fly the trained agent in your terminal
-python3 watch.py --seed 99 --fps 60   # try a different world
-python3 test_env.py                   # 11 failure-first checks
-python3 rounds.py --height 1080       # render a video (1080p draft, ~90s)
+pip install numpy pillow
 ```
 
-## What the bird sees
+Then run these three, in this order.
 
-Four small integers per frame. That is the whole observation.
+```bash
+python3 test_env.py     # 2 seconds. Checks the game and the rules.
+python3 train.py        # 45 seconds. Builds the table from scratch.
+python3 watch.py        # Watch the trained bird fly in your terminal.
+```
 
-| dimension | bins | bucket edges | meaning |
-|---|---|---|---|
-| `dx` | 6 | 8, 16, 26, 38, 52 | distance to the next pipe |
-| `dy` | 10 | -18, -12, -7, -3, 0, 3, 7, 12, 18 | height offset from that pipe's gap centre |
-| `vy` | 5 | -2.4, -0.8, 0.8, 2.4 | vertical speed |
-| `y` | 10 | 10, 18, 26, 34, 42, 50, 58, 66, 74 | absolute height |
+What you should see:
 
-6 x 10 x 5 x 10 = 3,000 states, two actions (coast or flap), so 6,000 Q values. The
-agent indexes a numpy array with that tuple and picks the larger of two numbers.
+1. `test_env.py` prints 11 lines that start with `ok`, then `all checks passed`.
+2. `train.py` prints a progress line every 2,000 lives, then a summary block.
+3. `watch.py` clears the screen and draws the game in ASCII at 30 frames per second.
 
-## The videos
+If `watch.py` says a file is missing, run `train.py` first. It writes
+`q_table.json` in the same folder.
 
-Three cuts ship in `videos/`:
+## What each file does
 
-- `rl_flappy_rounds_4k.mp4`: one checkpoint per round, 3840x2160 at 60 fps, ends the
-  moment a bird clears the 50th pipe (37s)
-- `rl_flappy_swarm.mp4`: 100 checkpoints on one level, with the analytics panel
-  (1720x900, 29s)
-- `rl_flappy_learning.mp4`: four checkpoints side by side, each panel freezing when
-  its bird dies (720x540, 23s)
-
-`render.py` puts four checkpoints on one level, side by side, and freezes each panel
-when its bird dies. `swarm.py` drops **100 checkpoints on a single level**, one bird
-per checkpoint, every 200 episodes from 0 to 19,800, coloured red (untrained)
-through yellow to green (trained).
-
-The swarm panel is 1720x900 and carries five live readouts: the alive and crashed
-counts, a top-of-the-flock leaderboard (episode count and pipes for the five birds
-furthest through), one bar per bird showing pipes cleared so far (bars freeze grey
-where a bird died, so the chart is also a death record), a histogram of when the
-crashes happened, and a step timeline under the ground. In the field itself every
-crash leaves a small cross where the bird went down, so the wall of X marks tracks
-the learning gap.
-
-On that swarm level, 750 steps long:
-
-| | birds |
-|---|---|
-| never cleared a pipe | 40 |
-| cleared 1 to 5 | 11 |
-| cleared 6 to 20 | 15 |
-| still flying when the tape stops | 34 |
-
-All 34 survivors had trained for at least 7,600 episodes. One bird trained for
-18,600 still crashed early on this level, because a 3,000 state table cannot see
-every gap position exactly. That is worth knowing before believing the 71 pipe
-average: the policy is very good on average and not perfect per level.
-
-### Round robin (`rounds.py`)
-
-One checkpoint per round. A group of 12 birds from that checkpoint starts, the next
-round begins only when the last one crashes, and the run advances to the next
-checkpoint. The video stops the moment a single bird clears the 50th pipe. The play
-field fills the frame height with the labels living in the side margins, so nothing
-sits on top of the game. Long runs switch to 6x playback after 3 pipes and say so.
-
-On level 31337 that plays out as:
-
-| round | checkpoint | result |
+| file | what it does | open it when |
 |---|---|---|
-| 1 to 4 | 0 to 6,000 episodes | wiped out before the first pipe |
-| 5 | 8,000 | 31 pipes |
-| 6 | 9,000 | 36 pipes |
-| 7 | 10,000 | **one bird cleared 50**, video ends |
+| `flappy.py` | The game. Gravity, pipes, collisions, and the four numbers the bird sees. | You want to change the difficulty. |
+| `agent.py` | The table of scores and the rule that improves it. | You want to change how fast it learns. |
+| `train.py` | Runs 20,000 lives, saves checkpoints, measures the result, draws the curve. | You want more training or a new level set. |
+| `watch.py` | Plays a saved table in the terminal, in ASCII. | You want to check a checkpoint in two seconds. |
+| `render.py` | Four checkpoints side by side, as video. | You want the short comparison clip. |
+| `swarm.py` | 100 checkpoints on one level, with a stats panel. | You want the wide overview clip. |
+| `rounds.py` | One checkpoint per round, ending at pipe 50. | You want the 4K clip. |
+| `draw.py` | Shared drawing helpers and font loading. | You want different colours or type. |
+| `test_env.py` | 11 checks on the rules of the game. | After you edit `flappy.py`. |
 
-```bash
-python3 rounds.py                       # 4K 60fps master, 37s (about 3m40s to render)
-python3 rounds.py --height 1080         # same layout at 1080p, for quick drafts
-python3 rounds.py --dry-run             # round outcomes and frame count, no encoding
-python3 rounds.py --target 80 --schedule 0,5000,8000,9000,10000,12000
+The data flows one way:
+
+```
+flappy.py  ->  train.py  ->  q_table.json  ->  watch.py
+                    |                        ->  render.py, swarm.py, rounds.py
+                    ->  stats.json, learning_curve.png, snapshots/
 ```
 
-Output is 3840x2160 at 60 fps, about 7 MB at crf 23. The layout is designed in a
-900-pixel-tall space and multiplied by height, so 1080p and 4K are the same
-composition: 4:3 play field at full height, centred, with 16:9 dark margins holding
-the checkpoint on the left and the flock counter on the right. Type is Space Grotesk
-(`assets/fonts/`).
+## How training works
 
-```bash
-python3 train.py --snap-every 100        # 201 checkpoints, one every 100 episodes
-python3 render.py --episodes 0,7500,8000,20000 --steps 750
-python3 swarm.py --birds 100 --seed 4242 --steps 750 --pick even
+`python3 train.py` does six things, in this order.
+
+1. Builds the game and an empty table of 6,000 zeros.
+2. Runs 20,000 lives. A life ends when the bird dies or reaches the step cap.
+3. Starts each life on a new level, generated from the seed.
+4. Learns from every step. The mechanics are below.
+5. Saves a checkpoint every N lives, if you ask for it.
+6. Stops exploring after 8,000 lives. The remaining 12,000 only refine the scores.
+
+### What the state is
+
+Four numbers, each rounded into a bucket. The bird sees nothing else.
+
+| number | buckets | what it measures |
+|---|---|---|
+| distance | 6 | space left before the next pipe |
+| offset | 10 | how far the bird sits above or below the middle of the gap |
+| speed | 5 | rising, level, or falling, and how fast |
+| height | 10 | how high the bird is on the screen |
+
+Six times ten times five times ten is 3,000 states. Each state gets two scores, one
+per button. The bird presses the button with the higher score. That is the whole
+policy.
+
+The height number looks redundant next to the offset. It is not, and leaving it out
+was one of the three bugs at the bottom.
+
+### What one step does to the table
+
+Every step runs the same five moves. They live in `update`, in `agent.py`.
+
+1. Read the state. Four numbers, so one row of the table.
+2. Press a button. Take the score in that row for that button.
+3. Take the reward. 0.1 for staying alive, 5 for a pipe, minus 10 for dying.
+4. Build the target. That reward, plus 0.95 times the best score in the next state.
+5. Move the score a fraction of the way to the target. The fraction is 0.20.
+
+```
+target = reward + 0.95 * best_score_of_next_state
+score  = score + 0.20 * (target - score)
 ```
 
-`--pick even` spaces the birds evenly across the training run. `--pick score` picks
-one bird per distinct survival length instead, which front-loads fewer instant
-deaths. `--dry-run` scores and picks without rendering.
+A real update, on a fresh table. The bird sits in state `(5, 1, 2, 4)`, presses flap,
+stays alive, and the next state is worth nothing yet:
 
-## How it was built
+```
+target = 0.10 + 0.95 * 0.00 = 0.10
+score  = 0.00 + 0.20 * (0.10 - 0.00) = 0.02
+```
 
-### Build order
+The same row, visited four times in a row, with the values the training run printed:
 
-1. **World first, with probes.** Before any learning I scripted three rollouts: never
-   flap, always flap, random. Each had to die for a different, explained reason
-   (ground, ceiling, pipe). Random play never reached the first pipe on any seed,
-   which told me the discovery problem was real and the reward had to carry the
-   learning.
-2. **Agent second.** About forty lines: `act(state, epsilon)`, `greedy(state)`,
-   `update(...)`, `save`/`load`. Keep `greedy` separate from `act`, because what you
-   evaluate and what you put in a video must not include exploration.
-3. **Training with instrumentation.** Score and step count per episode, a progress
-   line every 10%, a checkpoint every N episodes, and a `stats.json` written at the
-   end. That file is where every number in this README comes from.
-4. **Honest evaluation.** Greedy, on world seeds the agent never trained on,
-   reported separately from the training mean.
-5. **Videos last**, built from the saved checkpoints rather than the live agent, so
-   the same level can be replayed for every checkpoint.
+```
+0.000  ->  0.020  ->  0.036  ->  0.052
+```
 
-### The world
+Each visit adds less than the one before, because the target moves as the score
+catches up. That is the shape of the whole thing: one row at a time, creeping toward
+the truth.
 
-A 120 by 90 pixel field, no rendering library involved in the physics.
+The death step is where the table learns caution. That step pays 0.1 minus 10, and
+there is no next state to imagine:
 
-| constant | value |
-|---|---|
-| gravity | 0.40 px per step squared |
-| flap impulse | -3.2 px per step |
-| terminal fall speed | 5.5 px per step |
-| pipe speed | 1.7 px per step |
-| gap height | 30 px (bird hitbox is 5.2 px tall) |
-| pipe spacing | 56 px, about 33 steps apart |
-| bird x | fixed at 26, the world scrolls |
-| step cap | 2,400 (71 pipes at 1.7 px per step) |
+```
+target = -9.90
+score  = 0.00 + 0.20 * (-9.90 - 0.00) = -1.98
+```
 
-Levels come from one generator, `sample_gap(rng)`, drawing the gap centre uniformly
-between 29 and 52 px. Gap generation happens on a fixed step schedule that no bird
-can influence, which is what makes a level identical for every agent in the videos.
+Now the row carries a strongly negative number and the bird stops picking it. The
+worst score in the shipped table is -9.85, at a state one step from the ground.
 
-### The agent
+### What the table looks like after training
 
-Tabular Q-learning. The update is two lines:
+These are real rows from `q_table.json`. The four numbers are distance, offset,
+speed, and height.
+
+| row | coast | flap | bird presses |
+|---|---|---|---|
+| `(5, 4, 0, 3)` | +2.31 | +2.39 | flap |
+| `(5, 4, 1, 4)` | +2.19 | +0.71 | coast |
+| `(2, 5, 3, 5)` | 0.00 | +3.50 | flap |
+| `(0, 4, 2, 4)` | +5.41 | +2.68 | coast |
+
+A score is a sum of discounted future reward. Living alone tops out near 2.0, since
+one step pays 0.1 and every step of delay multiplies by 0.95. Anything above 2.0 came
+from pipes. Anything negative means the bird expects to die soon.
+
+Of the 3,000 rows, this run touched 1,061. 740 rows tell the bird to coast, 319 tell
+it to flap, and 1,941 are still all zeros because the bird never visited them. A zero
+row gives both buttons the same score, and the tie break in `greedy` presses flap.
+
+### Why the curve is flat, then steep
+
+The bird must reach a state before the table can learn anything about it. For the
+first 6,000 lives it cannot clear the first gap, so every row past that gap stays at
+zero and nothing downstream can improve.
+
+Once the bird clears the first gap most of the time, the rows past it start to fill.
+That lets it clear the second gap, and so on. This is why almost all of the
+improvement lands between 7,000 and 10,000 lives. It is not a slow grind. It is a door
+opening.
+
+### How much work that is
+
+2.78 million updates over 20,000 lives, at 139 steps per life on average. One core,
+45 seconds. A little over a thousand of the 6,000 numbers end up doing the work.
+
+Exploration is what gets the bird to that door. For the first 8,000 lives it presses a
+random button a large share of the time, which is how it discovers that flying up
+exists. After that the share drops to 2 percent, one random press in fifty. That 2
+percent is also why the training average stays low, since one random flap in a long
+run ends it.
+
+### Why those reward sizes
+
+Staying alive pays 0.1. A pipe pays 5, which is 50 steps of hovering. Dying costs 10,
+which is 100 steps. The sizes are not decoration: a fresh table starts at zero, so if
+dying paid anything at all, crashing would look better than an untried button. It did,
+for 40,000 lives, until the death penalty was added. The bug story is at the bottom.
+
+### What training prints
+
+```
+  ep   2000/20000  eps=0.755  mean pipes (last 2000) =   0.00  best =   0    0.3s
+  ep   4000/20000  eps=0.510  mean pipes (last 2000) =   0.00  best =   0    0.7s
+  ...
+  ep  20000/20000  eps=0.020  mean pipes (last 2000) =   5.65  best =  67   43.7s
+
+first 100 episodes : 0.00 pipes/run
+last  100 episodes : 6.80 pipes/run  (with 2% random actions)
+best single run    : 67 pipes
+greedy eval        : 71.00 pipes/run over 20 unseen worlds (min 71, max 71)
+long horizon       : [241, 241, 241, 241, 241] pipes (cap 8000 steps)
+state space        : 3000 states, 6000 Q values, 1061 states ever visited
+train time         : 45.1s
+```
+
+The progress line says four things. `eps` is how much guessing is left. `mean pipes`
+is the average, including the guessing. `best` is the best single life so far. The
+seconds are elapsed time. Do not worry when `mean pipes` sits at 0.00 for the first
+few thousand lives. That is normal.
+
+The summary is the part that matters. `last 100 episodes` stays low because of the 2
+percent guessing. `greedy eval` is the real score: the policy with no guessing, on 20
+levels it never trained on.
+
+### The knobs
+
+| flag | default | what it does |
+|---|---|---|
+| `--episodes` | 20000 | How many lives to run. 20,000 is enough. 5,000 is not. |
+| `--seed` | 23 | Changes the level sequence. Same seed gives the same result. |
+| `--alpha` | 0.20 | How far each score moves per step. Higher learns faster and jitters more. |
+| `--gamma` | 0.95 | How much the future counts. Lower makes the bird short sighted. |
+| `--snap-every` | 0 | Save a checkpoint every N lives. The video scripts need this. |
+| `--snap-marks` | 0.40,0.70 | Extra checkpoints at specific lives, or as a fraction. |
+| `--out` | script folder | Where to write the four output files. |
+
+Training uses one core. More cores do not make it faster, because there is one bird
+and it dies constantly.
+
+## What training writes
+
+| file | size | what it is |
+|---|---|---|
+| `q_table.json` | 65 KB | The table. 6,000 numbers as nested lists. This is the agent. |
+| `snapshots/ep_XXXXX.json` | 65 KB each | The same table, saved part way through the run. |
+| `stats.json` | 230 KB | Every number from the run, plus the per life history. |
+| `learning_curve.png` | 25 KB | The picture. A thin line per life, a thick average line. |
+
+The table is plain JSON on purpose. You can open it, diff two of them, or copy one
+checkpoint somewhere else. There is no model file and no build step.
+
+## Using a trained table
+
+`watch.py` plays a table in the terminal. By default it reads `q_table.json` from the
+folder the script sits in.
+
+```bash
+python3 watch.py                                # the trained table, until it dies
+python3 watch.py --seed 99                      # a level it has never seen
+python3 watch.py --steps 200                    # stop after 200 frames
+python3 watch.py --fps 60                       # faster playback
+python3 watch.py --q snapshots/ep_08000.json    # a mid training checkpoint
+```
+
+The last one is the useful one. Run it against `ep_00000`, `ep_08000`, `ep_12000`
+and `ep_20000` and you can watch the bird learn, in about ten seconds total, without
+rendering anything.
+
+To use a table from your own script:
 
 ```python
-target = reward if done else reward + gamma * Q[next_state].max()
-Q[state][action] += alpha * (target - Q[state][action])
+from agent import QAgent
+from flappy import Flappy
+
+agent = QAgent.load("q_table.json")
+env = Flappy(seed=7)
+state = env.reset()
+while True:
+    state, reward, done = env.step(agent.greedy(state))
+    if done:
+        break
+print(env.pipes_passed, env.death_reason)
 ```
 
-| hyperparameter | value |
-|---|---|
-| alpha | 0.20 |
-| gamma | 0.95 |
-| epsilon | 1.00 to 0.02, linear over the first 40% of training (8,000 episodes) |
-| episodes | 20,000 |
-| rewards | `+0.1` per surviving step, `+5` per pipe, `-10` on death |
+`agent.greedy(state)` never guesses. `agent.act(state, epsilon)` guesses, and belongs
+in training only.
 
-The table is 6,000 floats saved as JSON (65 KB). There is no model to ship, which is
-why a checkpoint is just a file and a video can mix 201 of them in one scene.
+## Making the videos
 
-### The three bugs that decided the outcome
+All three renderers replay checkpoints, so train with checkpoints first.
 
-Everything else was tuning. These three changed the result.
+```bash
+python3 train.py --snap-every 100        # 201 checkpoints, one every 100 lives
+```
 
-### 1. The reward taught the agent to die
+A render takes between 15 seconds and 4 minutes. Every renderer has `--dry-run`,
+which prints the outcome of each run and the frame count without encoding. Use it
+first.
 
-The first version paid `+1` per surviving step, `+2` per pipe, and nothing for dying.
-It sat at 0 to 1 pipes for 40,000 episodes with best runs of zero. The trap is that
-the dying step also pays the per-step reward, so a fresh all-zero table learns within
-a few hundred episodes that crashing is worth `+1` while an untried action is worth
-`0`. It optimises for the thing you were trying to penalise.
+| command | output | time |
+|---|---|---|
+| `python3 render.py --episodes 0,7500,8000,20000` | four panels, 720x540, 23s | 15s |
+| `python3 swarm.py --birds 100 --pick even` | 100 birds, one level, 29s | 30s |
+| `python3 rounds.py` | round robin, 4K at 60fps, 37s | 3m40s |
+| `python3 rounds.py --height 1080` | the same clip at 1080p, for drafts | 90s |
 
-The fix was scale, not episodes: `+0.1` per step, `+5` per pipe (a pipe is worth 50
-steps of hovering), `-10` on death. Same 20,000 episodes, from zero to a solved game.
+Useful flags on `rounds.py`: `--target 50` is the pipe that ends the tape, `--group
+12` is birds per round, `--schedule 0,2000,8000,10000` picks which checkpoints to
+try, and `--seed` picks the level.
 
-### 2. The state could not see the ceiling
+`swarm.py` needs at least as many checkpoints as birds. `rounds.py` needs the
+checkpoints in its schedule, which defaults to every 2,000 lives up to 12,000.
 
-The first observation was `(dx, dy, vy)` with `dy` measured from the gap centre.
-Because the gap centre moves, `dy = 0` can mean "safe in a low gap" or "one pixel
-from the ceiling", and the agent died against a wall it literally could not perceive.
-Finer buckets alone got best runs into double digits; adding the absolute height
-bucket `y` is what made the policy consistent.
+## Changing the game
 
-Rule of thumb that came out of this: any quantity that can kill the agent needs an
-absolute bucket, not only a position relative to a moving target.
+The difficulty lives in `flappy.py`, as constants near the top.
 
-### 3. Constructing an environment ate a random draw
+| constant | now | what happens if you change it |
+|---|---|---|
+| `PIPE_GAP` | 30 | Wider gaps make the game easier. |
+| `PIPE_SPACING` | 56 | More space means fewer pipes per second. |
+| `PIPE_SPEED` | 1.7 | Faster pipes give less time to correct. |
+| `GRAVITY` | 0.40 | Heavier gravity makes every flap matter more. |
+| `FLAP_V` | -3.2 | A stronger flap overshoots narrow gaps. |
 
-`Flappy(seed)` used to start an episode in its constructor. Every caller that then
-called `reset()` silently got the **second** level from that seed. I found it when
-the one-bird gym and the new multi-bird sim disagreed about the same checkpoint on
-the same seed: 848 steps in one, 189 in the other.
+If you change any of these, retrain. An old table still loads, but it expects the old
+physics.
 
-The constructor now only sets up the RNG and `reset()` draws the level. After the fix
-both sims report identical death step and identical score on every checkpoint I
-tested, and retraining produced a better table (71.0 pipes versus 59.6).
+The bucket edges in the same file decide the size of the table. If you change them,
+the table changes shape and old checkpoints will not load. The reward sizes live
+there too, and they decide what the bird cares about.
 
-### Dead ends
+### More buckets, or more training?
 
-Before the reward fix I spent several sweeps turning knobs. All of these were
-evaluated the same way, greedy over 20 unseen seeds after 20,000 episodes:
+Both, but the buckets cost more than most people expect. These are measured numbers,
+not estimates. Same seed, same twenty test levels, only the bucket counts changed.
 
-| change | greedy pipes |
-|---|---|
-| baseline | 0.20 |
-| slower pipes 1.2, gap 32 | 0.25 |
-| gentler physics (gravity 0.34, flap 2.4, gap 32) | 2.40 |
-| alpha 0.05 | 0.60 |
-| alpha 0.30 | 0.80 |
-| gamma 0.90 | 0.75 |
-| gamma 0.99 with alpha 0.05 | 0.85 |
+| buckets (distance, offset, speed, height) | cells | updates per visited cell | pipes per run | train time |
+|---|---|---|---|---|
+| 6, 10, 5, 10 | 3,000 | 927 | 71.0, every run at the cap | 45s |
+| 6, 19, 5, 19 | 10,830 | 200 | 32.7 | 38s |
+| 6, 37, 5, 37 | 41,070 | 37 | 7.1 | 27s |
 
-Seven knobs, no fix. After the reward change the same pipeline scored 71. The lesson
-is the one at the top of the list above: when a demo is stuck at zero, suspect the
-reward scale before you suspect the hyperparameters.
+At a fixed budget, more buckets makes the bird much worse. The middle column is the
+reason. A cell that sees 37 updates never settles on a number, so the bird acts on
+noise.
 
-Potential-based reward shaping (Ng et al. 1999) was also tried, after the reward fix,
-because it is the textbook answer to slow learning. It came out slightly worse here
-(64.9 pipes versus 71 at the cap): the potential jumps when the target switches from
-one pipe to the next, which is exactly the moment of success. It stays in the code as
-`SHAPE_K`, off by default, so you can reproduce the result.
+Paying for it works, up to a point. The 10,830 cell table trained for 100,000 lives
+reaches 71.0 again, in 4m34s instead of 45s. It catches up. It does not overtake,
+because the small table already flies until the step cap.
 
-### How the videos are made
+Flown past the cap, on eight fresh levels with a 60,000 step limit:
 
-No game engine, no matplotlib, no editing software. Three stages:
+| table | cells | train time | mean pipes | runs that hit the cap |
+|---|---|---|---|---|
+| small | 3,000 | 45s | 1,707.6 | 7 of 8 |
+| fine | 10,830 | 274s | 1,722.8 | 7 of 8 |
 
-**1. Simulate everything first.** The multi-bird sim holds one pipe list and one RNG,
-and every bird reads the same gaps. It records a snapshot per step: pipe positions,
-live bird positions, score, deaths. Rendering is then a pure function of those
-snapshots, which means a video can be re-run with a different font or resolution
-without touching the physics.
+That is noise, bought for six times the compute.
 
-**2. Pick which checkpoints fly.** Each checkpoint is scored on the exact level the
-video will use, the survival lengths are printed, and then 100 of the 201 are chosen
-(`--pick even` for even spacing over episodes, `--pick score` for one per distinct
-survival length). A learning curve this steep has a behavioural cliff that takes up
-about 10% of the run, and uniform sampling spends most of its birds on identical
-outcomes, so the choice matters more than it looks.
+A table does not generalise. Every cell learns alone, so bucket 4 and bucket 5 are
+strangers even though they are one pixel apart. Adding buckets does not add knowledge.
+It splits the same experience into more drawers.
 
-**3. Draw frames and pipe them into ffmpeg.** Sprites are pre-rendered once per
-colour and wing state, the sky gradient is one numpy array reused for every frame,
-fonts are cached per size, and each finished frame goes to x264 as raw RGB24 through
-stdin. Nothing is written to disk in between.
+Resolution pays when the task is hard enough that the small table fails. Narrow the
+gaps or speed up the pipes and the fine table has room to be better. The other fix is
+to stop treating cells as independent, with tile coding or any function approximation,
+so one update improves several nearby cells at once.
 
-Two details that made the 4K cut feel like video rather than a slideshow:
+## Three things went wrong
 
-- **60 fps by resampling, not re-simulating.** The sim runs at 40 steps per second.
-  The renderer walks output time with `s += rate / fps` and interpolates bird height
-  and pipe position between simulation steps, so the scroll is smooth. Fast forward
-  raises `rate` to 240 instead of dropping frames, so even the fast sections keep
-  their motion. Wing beats key off the frame index, otherwise they alias at 6x.
-- **A layout that survives a resolution change.** Everything is positioned in a
-  900-pixel-tall design space and multiplied by the output height, so 1080p and 4K
-  are the same composition. Both big numbers auto-fit their column: `10,000` at the
-  original size is 262 px wide, which clips a 240 px margin at 1080p and a 480 px one
-  at 4K.
+These cost the most time, and two of them were invisible until I looked at the right
+number.
 
-Cost of the 4K master: 2,249 frames, 3 minutes 43 seconds, 7.0 MB at crf 23. The
-1080p draft of the same video takes about 90 seconds.
+The first reward paid 1 for every step, including the step you die on. A fresh table
+starts at zero, so dying scored higher than any button it had not tried yet. The bird
+learned to crash, for 40,000 lives, with a best score of zero. Smaller rewards and a
+real death penalty fixed it.
 
-### What this does not do
+The first state had no absolute height. Height was measured only against the gap, and
+the gap moves. So "safe in a low gap" and "one pixel from the ceiling" looked the
+same to the table. The bird kept dying against a wall it could not see.
 
-- **3,000 states is coarse.** A checkpoint trained for 18,600 episodes still crashed
-  early on one level because a bucket boundary put it on the wrong side of a gap. The
-  71 pipe average is real and so is that failure.
-- **Round results are not monotone.** More training does not mean a better run on a
-  fixed level, and the videos show that rather than hiding it.
-- **A group is a best-of-N sample.** The 12 birds in a round share one policy and
-  differ only by start position. That is enough to change the outcome: at jitter 0.9
-  the 8,000 checkpoint reaches 50 pipes, at 1.3 it reaches 31.
-- **One fixed level per video.** Fair comparisons across checkpoints, no claim about
-  the distribution of levels beyond the 25 seeds used for evaluation.
+The environment used to start a life inside its constructor, so any caller that then
+asked for a new level got the second level from that seed. One simulator died at step
+848 where another died at 189. The constructor now only sets up the random number
+generator.
 
-## Files
+## What it still gets wrong
+
+Three thousand states is coarse. A checkpoint trained for 18,600 lives still crashed
+early on one level, because a bucket boundary put the bird on the wrong side of a gap.
+The 71 pipe average is real, and so is that failure.
+
+More training does not always give a better checkpoint. On one level the 8,000
+checkpoint reached 31 pipes and the 9,000 checkpoint reached 36. A later checkpoint
+reached 1 pipe. The videos show this instead of hiding it.
+
+## Files in the repo
 
 ```
-flappy.py        environment: physics, collision, state discretisation
-agent.py         tabular Q-learning (about 40 lines)
-train.py         training loop, greedy evaluation, learning curve
-render.py        4 checkpoints side by side -> ffmpeg
-swarm.py         100 checkpoints on one shared level -> ffmpeg
-rounds.py        one checkpoint per round, ends at the 50th pipe -> ffmpeg (4K)
-draw.py          shared pixel drawing helpers
-assets/fonts/    Space Grotesk + Inter (OFL), used by every renderer
-watch.py         ASCII terminal playback
-test_env.py      failure-first checks
-q_table.json     the trained table
-snapshots/       201 checkpoints from the training run
-stats.json       every number quoted above
-learning_curve.png
-videos/          the three rendered cuts
+flappy.py      the game
+agent.py       the table and the learning rule
+train.py       training, evaluation, and the files it writes
+watch.py       terminal playback
+render.py      four panel video
+swarm.py       one hundred bird video
+rounds.py      round robin 4K video
+draw.py        drawing helpers and fonts
+test_env.py    11 checks on the game rules
+q_table.json   the trained table
+snapshots/     201 checkpoints, one every 100 lives
+stats.json     every number in this README
+videos/        the three rendered clips and their poster frames
+assets/fonts/  Space Grotesk and Inter, used by the renderers
 ```
