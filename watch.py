@@ -1,4 +1,7 @@
-"""Watch the trained agent fly in your own terminal.
+"""Fly the trained bird in a terminal, using ASCII instead of sprites.
+
+Same physics, same table, no ffmpeg. It is the fastest way to check that a
+checkpoint actually flies before spending three minutes rendering it in 4K.
 
     python3 watch.py            # animated, 30 fps
     python3 watch.py --steps 3  # just show a few frames
@@ -70,7 +73,7 @@ def main() -> None:
         pass
     finally:
         sys.stdout.write("\033[?25h")
-    print(f"\n  done: {env.pipes_passed} pipes, {env.t} steps, ended by {env.death_reason or 'time limit'}")
+    print(f"\n  done: {env.pipes_passed} pipes, {env.t} steps, ended by {env.death_reason or 'your step limit'}")
 
 
 if __name__ == "__main__":

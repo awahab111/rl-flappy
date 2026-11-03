@@ -7,9 +7,17 @@ A group of birds from one checkpoint starts. When the last one crashes, the next
 checkpoint (more training) takes over with a fresh group. The run stops the moment
 a single bird clears the 50th pipe.
 
+Two things in here are worth knowing before you edit them.
+
 Layout is designed in a 900-pixel-tall space and scaled to the output height, so
-1080p and 4K are the same composition. The play field fills the frame height with
-the labels living in the side margins, which keeps the game itself unobstructed.
+1080p and 4K are the same composition. Big numbers are auto fitted to the side
+margin, because "10,000" is wider than the margin at some sizes.
+
+Motion is resampled, not re-simulated. The game runs at 40 steps per second and
+the video is written at 60 frames per second. `sample_state` interpolates bird
+height and pipe position between simulation steps so the scroll is smooth. Fast
+forward raises the sample rate instead of dropping frames, which keeps the fast
+sections readable.
 """
 from __future__ import annotations
 
@@ -196,6 +204,9 @@ def draw_hud(canvas: Image.Image, ctx, state, frame_in_round: int, alive_pulse: 
 
 
 # ----------------------------------------------------------------------- frames
+# One video frame rarely lines up with one simulation step, so this blends the
+# two nearest recorded states. Pipes move at a constant speed, so their position
+# is exact. Bird height is close enough; gravity inside one step is tiny.
 def sample_state(frames: list, s: float) -> dict:
     i = int(s)
     a = s - i

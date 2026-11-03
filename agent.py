@@ -1,4 +1,13 @@
-"""Tabular Q-learning. The whole agent is ~40 lines because the state is tiny."""
+"""The agent: a table of scores plus the rule that improves it.
+
+There is no model. `Q` is a numpy array shaped (6, 10, 5, 10, 2). The four state
+numbers index the first four dimensions, the action indexes the last one. A
+"score" is one number in that array.
+
+`act` and `greedy` look the same but they are not, and mixing them up is the
+easiest way to publish a number that is not true. `act` explores during training.
+`greedy` never guesses and is the only thing that should be evaluated or filmed.
+"""
 from __future__ import annotations
 
 import json
@@ -27,6 +36,7 @@ class QAgent:
         ties = np.flatnonzero(q == best)
         return int(ties[0]) if len(ties) == 1 else int(self.rng.choice(ties.tolist()))
 
+    # Same lookup, no randomness. Everything measured and rendered uses this.
     def greedy(self, state) -> int:
         q = self.Q[state]
         best = q.max()
@@ -36,6 +46,13 @@ class QAgent:
         return int(ties[-1])
 
     # ---------------------------------------------------------------- learning
+    # One step of Q-learning. `target` is what the score should have been: the
+    # reward just received, plus a discounted guess at the future (0 if the life
+    # just ended). The score then moves a fraction (alpha) of the way toward it.
+    #
+    # `done` is not a detail. Bootstrapping past a terminal state teaches the
+    # agent that dying still has a future, which is how a learner talks itself
+    # into crashing.
     def update(self, state, action: int, reward: float, next_state, done: bool) -> None:
         target = reward if done else reward + self.gamma * self.Q[next_state].max()
         self.Q[state][action] += self.alpha * (target - self.Q[state][action])

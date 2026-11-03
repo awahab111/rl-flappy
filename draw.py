@@ -1,4 +1,13 @@
-"""Pixel drawing helpers shared by the video renderer and the curve plot."""
+"""Drawing helpers shared by every renderer and by the learning curve.
+
+Pillow is the only graphics dependency in the project. These helpers do the parts
+that are easy to get subtly wrong: loading a font at many sizes, pasting a sprite
+that has transparent edges, and fitting text into a column that is narrower than
+the text wants to be.
+
+The font cache is not a micro optimisation. A 4K video is about 2,200 frames, and
+Pillow re-reads and re-parses a TTF file on every `truetype` call.
+"""
 from __future__ import annotations
 
 import os

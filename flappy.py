@@ -1,13 +1,25 @@
-"""Flappy-style gym: hand-rolled physics, zero dependencies.
+"""The game. Physics, pipes, collisions, and the four number state.
 
-The bird sits at a fixed x and the world scrolls. A tabular agent sees a
-discretised slice of reality and chooses flap-or-not. That is the whole game.
+The bird does not move forward. It sits at a fixed x and the world scrolls past
+it, which makes "how far is the next pipe" a single number.
 
-State is four small integers:
+Units are pixels of a 120x90 field. One step is one frame of the simulation.
+Gravity adds to vertical speed, vertical speed adds to height. Nothing else
+moves the bird.
+
+The state is four integers, not the pixels:
     dx   distance to the next pipe
     dy   height offset from the middle of its gap
-    vy   vertical speed (rising / level / falling)
-    y    absolute height  (without this the agent cannot see the ceiling)
+    vy   vertical speed, bucketed
+    y    absolute height
+
+`y` repeats information that `dy` seems to carry. It does not. `dy` is measured
+from a gap that moves up and down, so the same `dy` can mean "safe, low gap" or
+"about to hit the ceiling". Without an absolute height the agent cannot see the
+wall that kills it. That mistake cost a day on this project.
+
+Every constant below is tuned so the game is hard but not hopeless. A stronger
+flap makes the bird overshoot every gap. A weaker one cannot reach the next gap.
 """
 from __future__ import annotations
 
@@ -67,7 +79,12 @@ def sample_gap(rng: random.Random) -> float:
 
 
 def observe(pipes, y: float, vy: float):
-    """Discretised state for any bird anywhere in the level."""
+    """Turn a bird's position into four bucket numbers.
+
+    This lives at module level, not on the class, because the multi bird
+    simulators need the exact same encoder. Two copies would drift apart and the
+    videos would stop matching the training runs.
+    """
     target = None
     for p in pipes:
         if p[0] + PIPE_W >= BIRD_X - BIRD_HW:
@@ -114,6 +131,15 @@ class Flappy:
         self.pipes.append([x, sample_gap(self.rng), False])
 
     # ------------------------------------------------------------------ physics
+    # Order matters here, and it is the order the videos rely on:
+    #   1. the action changes vertical speed
+    #   2. gravity and the new height are applied
+    #   3. the world scrolls
+    #   4. a new pipe may appear off screen
+    #   5. scoring, then collisions
+    # Collisions come last so a bird that reaches a pipe and a bird that dies on
+    # it are decided on the same positions. Moving scoring after collision would
+    # give a bird credit for a pipe it never passed.
     def step(self, action: int):
         if action == 1:
             self.vy = FLAP_V

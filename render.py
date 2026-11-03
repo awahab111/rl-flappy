@@ -1,6 +1,12 @@
-"""Render the 'watch it learn' video: four checkpoints of the same policy, same world.
+"""The four panel video: one level, four checkpoints, side by side.
 
-Usage:  python3 render.py [--out ~/videos/rl_flappy_learning.mp4]
+All four birds play the same pipe layout with the same seed, so the only
+difference on screen is how much each one trained. When a bird dies its panel
+freezes and dims, and the other panels keep running. That is what makes the gap
+between checkpoints visible: the left panels stop moving while the right ones
+carry on.
+
+Usage:  python3 render.py --episodes 0,7500,8000,20000
 """
 from __future__ import annotations
 
@@ -65,6 +71,7 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=MAX_VIDEO_STEPS)
     ap.add_argument("--episodes", default="",
                     help="comma separated checkpoints to compare, e.g. 0,8000,9000,20000")
+    ap.add_argument("--dry-run", action="store_true", help="roll out each panel and report, no encoding")
     args = ap.parse_args()
 
     snaps = sorted(glob.glob(os.path.join(HERE, "snapshots", "ep_*.json")))
@@ -93,6 +100,9 @@ def main() -> None:
               f"{len(frames)} frames, died by {env.death_reason or 'time limit'}")
 
     total = min(max(len(f) for f in bases), args.steps + 1)
+    if args.dry_run:
+        print(f"  {len(snaps)} panels, {total} frames, {total / FPS:.1f}s at {FPS} fps, no encoding")
+        return
     bg = panel_bg()
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)

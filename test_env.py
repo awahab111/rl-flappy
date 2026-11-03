@@ -1,7 +1,12 @@
-"""Failure-first smoke tests for the flappy gym. Run: python3 test_env.py
+"""Checks on the game rules. Run: python3 test_env.py
 
-The point of each test is to prove the environment CAN punish you. The happy
-path gets one test at the end, only once every way to break has been checked.
+The order matters. Every test before the last one proves the game CAN punish the
+bird: ground, ceiling, pipe body, a terminal reward that is strongly negative,
+and a state that never leaves the table. Only after all of that does one test
+confirm that a trained checkpoint clears pipes.
+
+A game that cannot punish a bird will still pass a happy path test, which is why
+that test comes last.
 """
 from __future__ import annotations
 

@@ -8,6 +8,11 @@ Needs a run that kept many checkpoints:
 Every bird is a real checkpoint from the same training run, so the only thing
 that differs is how much the bird has learned. The pipe layout is generated once
 and shared, so nobody gets an easier level.
+
+The panel on the right is not decoration. It answers the three questions the
+video raises: how many are left, how far the leader got, and which training
+amounts died first. Bars freeze grey where a bird crashed, so the chart doubles
+as a record of the deaths.
 """
 from __future__ import annotations
 
@@ -38,7 +43,16 @@ MUTED = (148, 158, 162)
 # ---------------------------------------------------------------- shared level
 def simulate(agents, seed: int, max_steps: int, spread: float = 0.16,
              y_offsets=None, vy_offsets=None, stop_at: int | None = None):
-    """All birds in one world. One pipe list, one RNG, identical gaps."""
+    """All birds in one world. One pipe list, one RNG, identical gaps.
+
+    The gap sequence is drawn from a fixed schedule that no bird can influence,
+    so every bird meets the same pipes in the same order. `spread` shifts each
+    bird a fraction of a pixel apart; without it, identical policies stack into
+    one sprite and look like a single bird.
+
+    `stop_at` ends the run the moment any bird clears that many pipes, which is
+    what makes the round robin video stop on a win instead of a timeout.
+    """
     rng = random.Random(seed)
     pipes = [[F.W + 6.0, F.sample_gap(rng), 0]]
     next_id = 1

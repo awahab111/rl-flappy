@@ -1,9 +1,11 @@
-"""Train the tabular Q-learner and write out every artifact.
+"""Train the table, then write every artifact the README quotes.
 
-    python3 train.py                     # 20k episodes, write everything
+    python3 train.py                     # 20k lives, write everything
     python3 train.py --episodes 40000    # more practice
 
-Writes: q_table.json, snapshots/ep_*.json, learning_curve.png, stats.json
+Writes q_table.json, snapshots/ep_*.json, learning_curve.png and stats.json.
+stats.json is the source of truth for the numbers in the README. If a number
+appears in the docs and not in that file, it is a guess.
 """
 from __future__ import annotations
 
@@ -43,6 +45,9 @@ def train(episodes: int, seed: int, out_dir: str, snap_at: tuple[int, ...], alph
     t0 = time.time()
 
     for ep in range(1, episodes + 1):
+        # Exploration falls in a straight line from 1.0 to 0.02, then holds.
+        # It does not stop at zero: a small amount of guessing keeps the table
+        # from freezing on the first policy that happens to work.
         eps = max(eps_end, eps_start - (eps_start - eps_end) * (ep / decay_eps))
         obs = env.reset()
         done, steps = False, 0
@@ -114,7 +119,13 @@ def _save_snapshot(agent: QAgent, out_dir: str, ep: int) -> None:
 
 
 def evaluate(agent: QAgent, n: int = 20, seed_offset: int = 90000, cap: int = None) -> dict:
-    """Greedy evaluation on world seeds the agent never trained on."""
+    """Score the policy with no randomness, on levels it has never seen.
+
+    This is the number worth reporting. The training loop runs with epsilon at
+    2 percent, and one random flap ends a long run, so the training average sits
+    far below what the policy can actually do. Both numbers are written to
+    stats.json and the README explains the gap.
+    """
     old_cap = F.MAX_STEPS
     if cap:
         F.MAX_STEPS = cap
