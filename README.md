@@ -346,34 +346,6 @@ gaps or speed up the pipes and the fine table has room to be better. The other f
 to stop treating cells as independent, with tile coding or any function approximation,
 so one update improves several nearby cells at once.
 
-## Three things went wrong
-
-These cost the most time, and two of them were invisible until I looked at the right
-number.
-
-The first reward paid 1 for every step, including the step you die on. A fresh table
-starts at zero, so dying scored higher than any button it had not tried yet. The bird
-learned to crash, for 40,000 lives, with a best score of zero. Smaller rewards and a
-real death penalty fixed it.
-
-The first state had no absolute height. Height was measured only against the gap, and
-the gap moves. So "safe in a low gap" and "one pixel from the ceiling" looked the
-same to the table. The bird kept dying against a wall it could not see.
-
-The environment used to start a life inside its constructor, so any caller that then
-asked for a new level got the second level from that seed. One simulator died at step
-848 where another died at 189. The constructor now only sets up the random number
-generator.
-
-## What it still gets wrong
-
-Three thousand states is coarse. A checkpoint trained for 18,600 lives still crashed
-early on one level, because a bucket boundary put the bird on the wrong side of a gap.
-The 71 pipe average is real, and so is that failure.
-
-More training does not always give a better checkpoint. On one level the 8,000
-checkpoint reached 31 pipes and the 9,000 checkpoint reached 36. A later checkpoint
-reached 1 pipe. The videos show this instead of hiding it.
 
 ## Files in the repo
 
