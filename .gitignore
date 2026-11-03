@@ -1,0 +1,14 @@
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# os / editor noise
+.DS_Store
+*.swp
+*~
+
+# render scratch
+*.tmp
+out/
