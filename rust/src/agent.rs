@@ -1,9 +1,8 @@
 //! The agent. A flat `Vec<f64>` of 6,000 numbers and one rule for improving it.
 //!
-//! Python indexes a five dimensional numpy array with a tuple. Rust has no
-//! cheap tuple index, so every state is folded into one flat index and the
-//! table is a single allocation. That is the whole difference. It also happens
-//! to be the reason the Rust version is fast.
+//! Python indexes a five dimensional numpy array with a tuple. Rust has no cheap
+//! tuple index, so every state folds into one flat index over a single
+//! allocation. That change is also most of the speed difference.
 
 use crate::env::{N_ACTIONS, N_DY, N_STATES, N_VY, N_Y, Obs, Rng};
 

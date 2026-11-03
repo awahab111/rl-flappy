@@ -3,9 +3,9 @@
 A bird, some pipes, and a table of 6,000 numbers that learns to fly through them.
 No neural network. It trains on one core in 45 seconds.
 
-The project exists twice. `python/` is the readable original and the one the videos
-come from. `rust/` is the same game and the same learner, ported with no dependencies
-and about 250 times faster.
+The project exists in two versions. `python/` is the readable one, and the one the
+videos come from. `rust/` is the same game and the same learner, with no dependencies
+and about 250 times the speed.
 
 [![The flock in the final round](videos/preview.gif)](videos/rl_flappy_rounds_1080.mp4)
 
@@ -333,11 +333,11 @@ Scores still differ between the two, and that is the levels, not the code. Each
 version has its own random generator, so the same seed builds different pipes. Fly
 the same table through the same levels and the results match level for level.
 
-Which is the real argument for the port. Across 100 seeds the Rust trainer reaches
-71 pipes on 8 of them, with a median of 60.5. That sweep takes 19 seconds. In Python
-it would take 70 minutes. With one run you tune a lucky seed. With a hundred you
-measure a distribution and ship the best. `rust/README.md` has the design notes and
-the crate choices for a problem that does not fit in a table.
+That is the argument for the port. Across 100 seeds the Rust trainer reaches 71 pipes
+on 8 of them, with a median of 60.5. The sweep takes 19 seconds. In Python it would
+take 70 minutes. One run tells you whether a seed was lucky. A hundred tell you what
+the trainer usually does, and which table to keep. `rust/README.md` has the design
+notes and the crate choices for a problem that does not fit in a table.
 
 ## Changing the game
 
@@ -369,12 +369,12 @@ not estimates. Same seed, same twenty test levels, only the bucket counts change
 | 6, 19, 5, 19 | 10,830 | 200 | 32.7 | 38s |
 | 6, 37, 5, 37 | 41,070 | 37 | 7.1 | 27s |
 
-At a fixed budget, more buckets makes the bird much worse. The middle column is the
+At a fixed budget, more buckets make the bird much worse. The middle column is the
 reason. A cell that sees 37 updates never settles on a number, so the bird acts on
 noise.
 
 Paying for it works, up to a point. The 10,830 cell table trained for 100,000 lives
-reaches 71.0 again, in 4m34s instead of 45s. It catches up. It does not overtake,
+reaches 71.0 again, in 4m34s instead of 45s. It catches up but does not overtake,
 because the small table already flies until the step cap.
 
 Flown past the cap, on eight fresh levels with a 60,000 step limit:
@@ -384,7 +384,7 @@ Flown past the cap, on eight fresh levels with a 60,000 step limit:
 | small | 3,000 | 45s | 1,707.6 | 7 of 8 |
 | fine | 10,830 | 274s | 1,722.8 | 7 of 8 |
 
-That is noise, bought for six times the compute.
+That gap is noise, and it cost six times the compute.
 
 A table does not generalise. Every cell learns alone, so bucket 4 and bucket 5 are
 strangers even though they are one pixel apart. Adding buckets does not add knowledge.

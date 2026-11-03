@@ -1,13 +1,13 @@
 //! The game. Same rules as env.py, same constants, same order of operations
 //! inside a step.
 //!
-//! The port has one job: behave exactly like the Python version. Two simulators
-//! that disagree by a pixel turn every comparison into a lie, and this project
-//! exists to compare them. `--trace` plus `python/parity_trace.py` checks that
-//! step by step.
+//! This port has one job, which is to behave exactly like the Python version.
+//! Two simulators that disagree by a pixel make every comparison meaningless,
+//! and comparing them is the whole point here. `--trace` plus
+//! `python/parity_trace.py` checks it a frame at a time.
 //!
-//! There is no game engine here and no random number crate. The RNG is twelve
-//! lines of xorshift64* wrapped in a struct.
+//! No game engine, no random number crate. The RNG is twelve lines of
+//! xorshift64* in a struct.
 
 /// xorshift64*, deterministic on every platform.
 pub struct Rng {

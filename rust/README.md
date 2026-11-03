@@ -1,11 +1,10 @@
 # The same agent, in Rust
 
-Same game, same table, same update rule as the Python version in `../python/`,
-ported without a game engine, a tensor library, or a single crate. Three files, no
-dependencies.
+Same game, same table, same update rule as the Python version in `../python/`. It has
+no dependencies and no game engine, just three files.
 
-The point is not that Rust is a better language for Q-learning. The point is
-what the speed buys, and what porting it teaches about where the time goes.
+Nothing here argues that Rust is the right language for Q-learning. It is faster, and
+the useful part was finding out what that speed buys on a game this small.
 
 ## Build and run
 
@@ -24,52 +23,49 @@ wrote q_table_rust.json (59 KB)
 
 Flags: `--episodes`, `--seed`, `--out`, `--eval-levels`, `--trace`.
 
-The table it writes is the same two line format `python/agent.py` reads, so the
+The table it writes uses the same two line format `python/agent.py` reads, so the
 Python renderers and `watch.py` can fly a Rust trained bird without changes.
 
-## What is different from the Python version
+## What is different
 
 The physics is a line by line port. The learner is the same equation. The data
 layout is the only real design change.
 
-Python indexes a five dimensional numpy array with a tuple of four numbers.
-Rust folds those four numbers into one integer and keeps the table in a single
-`Vec<f64>`:
+Python indexes a five dimensional numpy array with a tuple of four numbers. Rust
+folds those four into one integer and keeps the table in a single `Vec<f64>`:
 
 ```
 offset = ((dx * N_DY + dy) * N_VY + vy) * N_Y + y
 ```
 
-One multiply and add chain, one pointer, no bounds checked tuple indexing, and
-the table sits in one contiguous 48 KB block that stays in cache. Same 6,000
-numbers. Different number of instructions to reach one.
+One multiply and add chain, one pointer, and the whole table sits in a contiguous
+48 KB block that stays in cache. Same 6,000 numbers, far fewer instructions to reach
+one.
 
-The random number generator is twelve lines of xorshift64* instead of `rand`.
-Not because a crate is bad, but because a demo that claims no dependencies
-should have none.
+The random number generator is twelve lines of xorshift64* instead of the `rand`
+crate. A crate would work fine, but a demo that claims no dependencies should have
+none.
 
-## What is the same, and how that was checked
+## How the two were checked
 
-Two tests, both runnable:
+The first check is frame by frame. `--trace 400` flies a level with no randomness and
+a fixed action pattern, printing height and speed every step, and
+`python/parity_trace.py` prints the same four hundred lines from the Python game. The
+two files are identical to twelve decimal places.
 
-1. **Physics, frame by frame.** `--trace 400` flies a level with no randomness
-   and a fixed action pattern, printing height and speed every step.
-   `python/parity_trace.py` prints the same four hundred lines from the Python
-   game. The files are identical to twelve decimal places.
+```bash
+./target/release/flappy-q --trace 400 > rust_trace.txt
+python3 ../python/parity_trace.py 400 > py_trace.txt
+diff rust_trace.txt py_trace.txt
+```
 
-   ```bash
-   ./target/release/flappy-q --trace 400 > rust_trace.txt
-   python3 ../python/parity_trace.py 400 > py_trace.txt
-   diff rust_trace.txt py_trace.txt
-   ```
+The second check is end to end. The two versions use different RNGs, so the same seed
+gives different levels and the scores move around. To take that out of the
+comparison, I ported the Rust xorshift into Python, flew the same table, and got the
+same 20 level evaluation, level for level.
 
-2. **End to end, same level.** The two versions use different RNGs, so the same
-   seed gives different levels and the scores move. To remove that from the
-   comparison, port the Rust xorshift into Python, fly the same table, and the
-   20 level evaluation matches Rust exactly, level for level.
-
-Without test 2 the honest claim is "similar score". With it the claim is "the
-same game, and any difference in score comes from the levels, not the code".
+Without those two, the honest claim is "similar score". With them, the claim is that
+the game is the same and any difference in score comes from the levels.
 
 ## Where the speed comes from
 
@@ -82,25 +78,20 @@ Measured on this machine, one core, release build:
 | table | numpy array | `Vec<f64>` |
 | dependencies | numpy, Pillow | none |
 
-Three reasons, in order of size:
+Most of the gap is the interpreter. Every `env.step()` in Python is a method call, a
+tuple build, and an array lookup, while Rust compiles the same step into a few dozen
+instructions. Some of the rest is numpy, since `self.Q[state].max()` builds a view and
+dispatches through numpy to compare two numbers, which costs more than the arithmetic
+it performs. The last piece is layout, because a flat index into one contiguous
+vector stays in cache.
 
-1. **The interpreter.** Every `env.step()` in Python is a method call, a tuple
-   build, and a dict or array lookup. Rust compiles the whole step into a few
-   dozen instructions.
-2. **numpy per call overhead.** `self.Q[state].max()` allocates a view and
-   dispatches through numpy for two numbers. That costs more than the arithmetic
-   it performs.
-3. **Layout.** A flat index into a contiguous vector is friendlier to the cache
-   than a multi dimensional array lookup.
+None of that is a claim about language speed in general. When a step is twenty
+floating point operations, almost all of the cost is the overhead around them.
 
-The 250 times gap is not a language benchmark. It is what happens when the work
-per step is 20 floating point operations and the per step overhead is a
-function call in a slow language.
+## Seeds, and what the speed is for
 
-## Seeds, and what the speed is actually for
-
-Scores vary a lot between seeds, in both versions. Across 100 seeds at 20,000
-lives each:
+Scores swing a lot between seeds in both versions. Across 100 seeds at 20,000 lives
+each:
 
 | statistic | pipes on 20 unseen levels |
 |---|---|
@@ -109,40 +100,37 @@ lives each:
 | mean | 55.4 |
 | worst | 4.8 |
 
-The whole sweep takes 19 seconds in Rust. In Python it would take about 70
-minutes. That is the practical difference. With one run you tune a seed. With a
-hundred runs you measure a distribution and ship the best one.
+The whole sweep takes 19 seconds in Rust and about 70 minutes in Python. That is the
+difference that matters. One run tells you whether a seed was lucky. A hundred tell
+you what the trainer usually does, and which table to keep.
 
 `q_table_rust.json` is seed 19, the best of that sweep.
 
 ## If this were a real project
 
-The table is 6,000 numbers, so none of this is needed here. For a bigger
-problem:
+The table is 6,000 numbers, so none of this is needed here. For something bigger:
 
-- **Tabular, still.** `rurel` (0.6.0, last release June 2024, about 20,000
-  downloads) gives you the same Q learning inside a crate. Useful for the traits,
-  not for the speed. The table here is smaller than the crate.
-- **Neural network.** `candle` (0.11, about 11 million downloads) and `burn`
-  (0.23) are the live options for tensors. `tch` binds libtorch, which is not
-  native Rust but is the shortest path from PyTorch. `dfdx` has not shipped since
-  2023.
-- **Parallel rollouts.** `rayon` over episodes. Q-learning updates depend on
-  each other, so this means either Hogwild style atomic updates or a merge step,
-  and both change what "reproducible" means.
-- **Calling it from Python.** `pyo3` plus `maturin`. The boundary costs about
-  100 ns per call, which is why projects like `rlox` move whole loops into Rust
-  instead of calling Rust once per step.
-- **Benchmarks.** `criterion`, if you want to measure rather than trust a table
-  in a README.
+- `rurel` 0.6.0, last release June 2024, about 20,000 downloads. It is tabular Q
+  learning in a crate. For a table this small, the crate is bigger than the problem.
+- `candle` 0.11.1 and `burn` 0.23 for tensors, or `tch` 0.26 if you want libtorch.
+  `dfdx` has shipped nothing since 2023. You need one of these the moment the table
+  becomes a neural network, and not before.
+- `pyo3` 0.30 plus `maturin` 1.16 to call Rust from Python. Crossing the boundary
+  costs about 100 ns, against roughly 500 ns for a numpy dispatch, which is why
+  projects like `rlox` move whole loops across instead of calling Rust per step.
+- `rayon` 1.12 for parallel rollouts. Q-learning updates depend on each other, so
+  this means Hogwild style atomics or a merge step, and both change what
+  reproducible means.
+- `criterion` 0.8 if you want to measure rather than trust a table in a README.
 
 ## Limits
 
-- One core. The 8 core box here is idle during training, because a single
-  episode is inherently sequential and the table is shared.
-- The exploration schedule, the reward sizes and the bucket edges are copied
-  from the Python version, not retuned. A Rust port with its own tuning would
-  probably reach 71 more often than 8 seeds in 100.
-- The score depends on the seed more than on the language. Any comparison
-  between the two implementations has to control for the levels, which is what
-  the two tests above are for.
+One core. The eight cores on this box sat idle during training, because a single
+episode is sequential and every episode writes to the same table.
+
+The exploration schedule, the reward sizes and the bucket edges are copied from the
+Python version rather than retuned. A port with its own tuning would probably reach
+71 more often than 8 seeds in 100.
+
+The score depends on the seed more than on the language, so any comparison between
+the two has to control for the levels. That is what the two checks above are for.

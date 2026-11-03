@@ -1,11 +1,8 @@
 //! Train the same agent as `train.py`, in Rust, with no dependencies.
 //!
-//! What this binary is for:
-//!   * prove the game and the learner are portable, by matching Python step
-//!     for step (see `--trace` and `python/parity_trace.py`)
-//!   * show the cost of the Python interpreter in the training loop, by
-//!     running the identical 20,000 episodes as fast as the machine allows
-//!   * write a table the Python renderers can load without modification
+//! This binary exists to answer three questions about the Python version behind
+//! it: does the game survive a rewrite, how much of the training time is the
+//! interpreter, and can a table trained here feed the existing renderers.
 //!
 //! Usage:
 //!   cargo run --release -- --episodes 20000 --seed 23 --out q_table_rust.json
