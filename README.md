@@ -3,6 +3,10 @@
 A bird, some pipes, and a table of 6,000 numbers that learns to fly through them.
 No neural network. It trains on one core in 45 seconds.
 
+The project exists twice. `python/` is the readable original and the one the videos
+come from. `rust/` is the same game and the same learner, ported with no dependencies
+and about 250 times faster.
+
 [![The flock in the final round](videos/preview.gif)](videos/rl_flappy_rounds_1080.mp4)
 
 That preview plays on the page. Click it for the full clip at 1080p. The 4K master is
@@ -15,16 +19,20 @@ You need Python 3.10 or newer, plus numpy and Pillow. ffmpeg is only needed if y
 want to render video.
 
 ```bash
+cd python
 pip install numpy pillow
 ```
 
-Then run these three, in this order.
+Then run these three, in this order, from inside `python/`.
 
 ```bash
 python3 test_env.py     # 2 seconds. Checks the game and the rules.
 python3 train.py        # 45 seconds. Builds the table from scratch.
 python3 watch.py        # Watch the trained bird fly in your terminal.
 ```
+
+Every Python command in this README assumes you are in `python/`. The Rust commands
+assume `rust/`.
 
 What you should see:
 
@@ -39,22 +47,26 @@ If `watch.py` says a file is missing, run `train.py` first. It writes
 
 | file | what it does | open it when |
 |---|---|---|
-| `flappy.py` | The game. Gravity, pipes, collisions, and the four numbers the bird sees. | You want to change the difficulty. |
-| `agent.py` | The table of scores and the rule that improves it. | You want to change how fast it learns. |
-| `train.py` | Runs 20,000 lives, saves checkpoints, measures the result, draws the curve. | You want more training or a new level set. |
-| `watch.py` | Plays a saved table in the terminal, in ASCII. | You want to check a checkpoint in two seconds. |
-| `render.py` | Four checkpoints side by side, as video. | You want the short comparison clip. |
-| `swarm.py` | 100 checkpoints on one level, with a stats panel. | You want the wide overview clip. |
-| `rounds.py` | One checkpoint per round, ending at pipe 50. | You want the 4K clip. |
-| `draw.py` | Shared drawing helpers and font loading. | You want different colours or type. |
-| `test_env.py` | 11 checks on the rules of the game. | After you edit `flappy.py`. |
+| `python/env.py` | The game. Gravity, pipes, collisions, and the four numbers the bird sees. | You want to change the difficulty. |
+| `python/agent.py` | The table of scores and the rule that improves it. | You want to change how fast it learns. |
+| `python/train.py` | Runs 20,000 lives, saves checkpoints, measures the result, draws the curve. | You want more training or a new level set. |
+| `python/watch.py` | Plays a saved table in the terminal, in ASCII. | You want to check a checkpoint in two seconds. |
+| `python/render.py` | Four checkpoints side by side, as video. | You want the short comparison clip. |
+| `python/swarm.py` | 100 checkpoints on one level, with a stats panel. | You want the wide overview clip. |
+| `python/rounds.py` | One checkpoint per round, ending at pipe 50. | You want the 4K clip. |
+| `python/draw.py` | Shared drawing helpers and font loading. | You want different colours or type. |
+| `python/test_env.py` | 11 checks on the rules of the game. | After you edit `env.py`. |
+| `python/parity_trace.py` | Prints the same 400 frames as `rust/`, for a diff. | After you edit the physics on either side. |
+| `rust/src/env.rs` | The same game, constant for constant. | Same reasons as `env.py`. |
+| `rust/src/agent.rs` | The same table, in one flat `Vec<f64>`. | You want to see the index arithmetic. |
+| `rust/src/main.rs` | Training loop, evaluation, and the JSON writer. | You want the speed comparison. |
 
 The data flows one way:
 
 ```
-flappy.py  ->  train.py  ->  q_table.json  ->  watch.py
-                    |                        ->  render.py, swarm.py, rounds.py
-                    ->  stats.json, learning_curve.png, snapshots/
+env.py  ->  train.py  ->  q_table.json  ->  watch.py
+               |                        ->  render.py, swarm.py, rounds.py
+               ->  stats.json, learning_curve.png, snapshots/
 ```
 
 ## How training works
@@ -255,7 +267,7 @@ To use a table from your own script:
 
 ```python
 from agent import QAgent
-from flappy import Flappy
+from env import Flappy
 
 agent = QAgent.load("q_table.json")
 env = Flappy(seed=7)
@@ -300,9 +312,36 @@ own, `--height 1080` gives the small version directly, in about 90 seconds.
 `swarm.py` needs at least as many checkpoints as birds. `rounds.py` needs the
 checkpoints in its schedule, which defaults to every 2,000 lives up to 12,000.
 
+## The same agent in Rust
+
+`rust/` is the same game and the same learner, ported with no dependencies at all.
+It trains the identical 20,000 lives in 0.16 seconds instead of 42, and writes a
+table the Python tools load without changes.
+
+| | Python | Rust |
+|---|---|---|
+| 20,000 lives | 42.0s | 0.16s |
+| updates per second | 66,000 | 19,300,000 |
+| table | numpy array | `Vec<f64>` |
+| dependencies | numpy, Pillow | none |
+
+The Rust game is the same game, not a lookalike. `--trace 400` prints four hundred
+frames, and `python/parity_trace.py` prints the same four hundred from the Python
+side. The two files are identical to twelve decimal places.
+
+Scores still differ between the two, and that is the levels, not the code. Each
+version has its own random generator, so the same seed builds different pipes. Fly
+the same table through the same levels and the results match level for level.
+
+Which is the real argument for the port. Across 100 seeds the Rust trainer reaches
+71 pipes on 8 of them, with a median of 60.5. That sweep takes 19 seconds. In Python
+it would take 70 minutes. With one run you tune a lucky seed. With a hundred you
+measure a distribution and ship the best. `rust/README.md` has the design notes and
+the crate choices for a problem that does not fit in a table.
+
 ## Changing the game
 
-The difficulty lives in `flappy.py`, as constants near the top.
+The difficulty lives in `python/env.py`, as constants near the top.
 
 | constant | now | what happens if you change it |
 |---|---|---|
@@ -360,22 +399,30 @@ so one update improves several nearby cells at once.
 ## Files in the repo
 
 ```
-flappy.py      the game
-agent.py       the table and the learning rule
-train.py       training, evaluation, and the files it writes
-watch.py       terminal playback
-render.py      four panel video
-swarm.py       one hundred bird video
-rounds.py      round robin 4K video
-draw.py        drawing helpers and fonts
-test_env.py    11 checks on the game rules
-q_table.json   the trained table
-stats.json     every number in this README
-learning_curve.png  the picture
-videos/        three clips, a 1080p copy, and a preview GIF
-assets/fonts/  Space Grotesk, used by the renderers
+python/
+  env.py            the game
+  agent.py          the table and the learning rule
+  train.py          training, evaluation, and the files it writes
+  watch.py          terminal playback
+  render.py         four panel video
+  swarm.py          one hundred bird video
+  rounds.py         round robin 4K video
+  draw.py           drawing helpers and fonts
+  test_env.py       11 checks on the game rules
+  parity_trace.py   cross-check against the Rust game
+  q_table.json      the trained table
+  stats.json        every number in this README
+  learning_curve.png  the picture
+  assets/fonts/     Space Grotesk, used by the renderers
+rust/
+  src/env.rs        the same game, same constants
+  src/agent.rs      the same table, flat Vec<f64>
+  src/main.rs       training loop, evaluation, JSON writer
+  Cargo.toml        no dependencies
+  q_table_rust.json seed 19, best of a 100 seed sweep
+videos/             three clips, a 1080p copy, and a preview GIF
 ```
 
-`snapshots/` is not in the repo. It holds 201 checkpoints, which is 12 MB of generated
-JSON. `python3 train.py --snap-every 100` rebuilds it exactly, because training uses a
-fixed seed and produces the same table every time.
+`python/snapshots/` is not in the repo. It holds 201 checkpoints, which is 12 MB of
+generated JSON. `python3 train.py --snap-every 100` rebuilds it exactly, because
+training uses a fixed seed and produces the same table every time.

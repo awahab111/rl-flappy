@@ -14,7 +14,7 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 
-import flappy as F
+import env as F
 
 FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",

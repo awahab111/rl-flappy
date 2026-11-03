@@ -15,3 +15,6 @@ out/
 
 # generated checkpoints. Rebuild with: python3 train.py --snap-every 100
 snapshots/
+
+# rust build output
+rust/target/

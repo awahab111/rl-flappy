@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 import draw as D
-import flappy as F
+import env as F
 from agent import QAgent
 
 CURVE_BG = (250, 250, 247)

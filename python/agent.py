@@ -15,7 +15,7 @@ import random
 
 import numpy as np
 
-from flappy import N_ACTIONS, N_DX, N_DY, N_VY, N_Y
+from env import N_ACTIONS, N_DX, N_DY, N_VY, N_Y
 
 Q_SHAPE = (N_DX, N_DY, N_VY, N_Y, N_ACTIONS)
 

@@ -15,7 +15,7 @@ import tempfile
 
 import numpy as np
 
-import flappy as F
+import env as F
 from agent import QAgent
 
 FAILS: list[str] = []

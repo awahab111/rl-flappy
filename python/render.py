@@ -20,7 +20,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 import draw as D
-import flappy as F
+import env as F
 from agent import QAgent
 
 PANEL_W, PANEL_H = 360, 270          # 120x90 world at scale 3

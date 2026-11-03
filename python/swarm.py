@@ -26,7 +26,7 @@ import subprocess
 from PIL import Image, ImageDraw
 
 import draw as D
-import flappy as F
+import env as F
 from agent import QAgent
 
 HERE = os.path.dirname(os.path.abspath(__file__))

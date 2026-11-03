@@ -30,7 +30,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 import draw as D
-import flappy as F
+import env as F
 from agent import QAgent
 from swarm import bird_sprite, hue_color, simulate
 

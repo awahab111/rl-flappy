@@ -13,7 +13,7 @@ import os
 import sys
 import time
 
-import flappy as F
+import env as F
 from agent import QAgent
 
 COLS, ROWS = 60, 30

@@ -1,0 +1,17 @@
+[package]
+name = "flappy-q"
+version = "0.1.0"
+edition = "2021"
+description = "Tabular Q-learning for the Flappy game, no crates and no engine"
+license = "MIT"
+
+[dependencies]
+
+[profile.release]
+# The training loop is a handful of float operations per step, so the usual
+# release defaults leave performance on the table. LTO and one codegen unit
+# let the table index and the physics inline into a single tight loop.
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
