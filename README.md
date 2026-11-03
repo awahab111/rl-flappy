@@ -3,7 +3,11 @@
 A bird, some pipes, and a table of 6,000 numbers that learns to fly through them.
 No neural network. It trains on one core in 45 seconds.
 
-[![The last round of the 4K cut](videos/poster_rounds.png)](videos/rl_flappy_rounds_4k.mp4)
+[![The flock in the final round](videos/preview.gif)](videos/rl_flappy_rounds_1080.mp4)
+
+That preview plays on the page. Click it for the full clip at 1080p. The 4K master is
+`videos/rl_flappy_rounds_4k.mp4` (3840x2160, 7 MB). GitHub and some browser players
+refuse that file, so download it and open it locally if the player stays black.
 
 ## Start here
 
@@ -79,8 +83,9 @@ Six times ten times five times ten is 3,000 states. Each state gets two scores, 
 per button. The bird presses the button with the higher score. That is the whole
 policy.
 
-The height number looks redundant next to the offset. It is not, and leaving it out
-was one of the three bugs at the bottom.
+The height number looks redundant next to the offset. It is not. Without it, "safe in
+a low gap" and "one pixel from the ceiling" land in the same bucket, and the bird
+flies into a wall it cannot see.
 
 ### What one step does to the table
 
@@ -173,7 +178,7 @@ run ends it.
 Staying alive pays 0.1. A pipe pays 5, which is 50 steps of hovering. Dying costs 10,
 which is 100 steps. The sizes are not decoration: a fresh table starts at zero, so if
 dying paid anything at all, crashing would look better than an untried button. It did,
-for 40,000 lives, until the death penalty was added. The bug story is at the bottom.
+for 40,000 lives, until the death penalty was added.
 
 ### What training prints
 
@@ -287,6 +292,10 @@ Useful flags on `rounds.py`: `--target 50` is the pipe that ends the tape, `--gr
 12` is birds per round, `--schedule 0,2000,8000,10000` picks which checkpoints to
 try, and `--seed` picks the level.
 
+The 4K file is heavy enough that some players refuse it. `videos/rl_flappy_rounds_1080.mp4`
+is the same run scaled to 1080p, and that one plays in a browser. If you render your
+own, `--height 1080` gives the small version directly, in about 90 seconds.
+
 `swarm.py` needs at least as many checkpoints as birds. `rounds.py` needs the
 checkpoints in its schedule, which defaults to every 2,000 lives up to 12,000.
 
@@ -362,6 +371,6 @@ test_env.py    11 checks on the game rules
 q_table.json   the trained table
 snapshots/     201 checkpoints, one every 100 lives
 stats.json     every number in this README
-videos/        the three rendered clips and their poster frames
+videos/        three clips, a 1080p copy, and a preview GIF
 assets/fonts/  Space Grotesk and Inter, used by the renderers
 ```
