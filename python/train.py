@@ -105,8 +105,9 @@ def train(episodes: int, seed: int, out_dir: str, snap_at: tuple[int, ...], alph
         "snapshots": snaps_done,
         "train_seconds": round(time.time() - t0, 1),
         "state_space": int(F.N_DX * F.N_DY * F.N_VY * F.N_Y),
-        "q_states_learned": int(np.count_nonzero(np.abs(agent.Q).sum(axis=-1) > 0)),
-        "q_values_total": int(agent.Q.size),
+        "q_states_learned": sum(1 for i in range(0, len(agent.q), 2)
+                                if agent.q[i] or agent.q[i + 1]),
+        "q_values_total": len(agent.q),
     }
     with open(os.path.join(out_dir, "stats.json"), "w") as fh:
         json.dump(stats, fh, indent=1)

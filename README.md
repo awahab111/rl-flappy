@@ -1,11 +1,11 @@
 # rl-flappy
 
 A bird flies through pipes. A table of 6,000 numbers decides when the bird flaps.
-There is no neural network. Training runs on one core in 45 seconds.
+There is no neural network. Training runs on one core in 12 seconds.
 
 The project exists in two versions. `python/` is the readable one, and the videos come
 from it. `rust/` holds the same game and the same learner, with no dependencies. It
-runs about 250 times faster.
+runs about 70 times faster.
 
 [![The flock in the final round](videos/preview.gif)](videos/rl_flappy_rounds_1080.mp4)
 
@@ -26,7 +26,7 @@ Run these three commands in this order.
 
 ```bash
 python3 test_env.py     # 2 seconds. Checks the game and the rules.
-python3 train.py        # 45 seconds. Builds the table from zero.
+python3 train.py        # 12 seconds. Builds the table from zero.
 python3 watch.py        # Shows the trained bird in your terminal.
 ```
 
@@ -176,7 +176,7 @@ gradual.
 ### How much work that is
 
 The run makes 2.78 million updates over 20,000 lives. A life averages 139 steps. One
-core takes 45 seconds. About a thousand of the 6,000 numbers do the work.
+core takes 12 seconds. About a thousand of the 6,000 numbers do the work.
 
 Exploration gets the bird to the first gap. For the first 8,000 lives it chooses a
 random action often. That is how it finds that flying up is possible. After that the
@@ -193,10 +193,12 @@ lives, until the death penalty arrived.
 ### What training prints
 
 ```
-  ep   2000/20000  eps=0.755  mean pipes (last 2000) =   0.00  best =   0    0.3s
-  ep   4000/20000  eps=0.510  mean pipes (last 2000) =   0.00  best =   0    0.7s
+  ep   2000/20000  eps=0.755  mean pipes (last 2000) =   0.00  best =   0    0.1s
+  ep   4000/20000  eps=0.510  mean pipes (last 2000) =   0.00  best =   0    0.2s
+  ep   6000/20000  eps=0.265  mean pipes (last 2000) =   0.00  best =   0    0.4s
+  ep   8000/20000  eps=0.020  mean pipes (last 2000) =   0.50  best =  16    0.8s
   ...
-  ep  20000/20000  eps=0.020  mean pipes (last 2000) =   5.65  best =  67   43.7s
+  ep  20000/20000  eps=0.020  mean pipes (last 2000) =   5.65  best =  67   11.1s
 
 first 100 episodes : 0.00 pipes/run
 last  100 episodes : 6.80 pipes/run  (with 2% random actions)
@@ -204,7 +206,7 @@ best single run    : 67 pipes
 greedy eval        : 71.00 pipes/run over 20 unseen worlds (min 71, max 71)
 long horizon       : [241, 241, 241, 241, 241] pipes (cap 8000 steps)
 state space        : 3000 states, 6000 Q values, 1061 states ever visited
-train time         : 45.1s
+train time         : 11.4s
 ```
 
 The progress line shows four things. `eps` is the share of random actions that
@@ -256,7 +258,7 @@ python3 watch.py --q snapshots/ep_08000.json    # a checkpoint, see below
 ```
 
 The last command is the useful one. It needs checkpoints on disk. Run `train.py
---snap-every 100` once (45 seconds). Then point `--q` at `ep_00000`, `ep_08000`,
+--snap-every 100` once (12 seconds). Then point `--q` at `ep_00000`, `ep_08000`,
 `ep_12000`, and `ep_20000`. You then see the bird learn in about ten seconds, with no
 video render.
 
@@ -311,15 +313,26 @@ checkpoints in its schedule. The default schedule is every 2,000 lives up to 12,
 ## The same agent in Rust
 
 `rust/` holds the same game and the same learner. It has no dependencies. It trains
-the same 20,000 lives in 0.16 seconds, not 42. It writes a table that the Python tools
+the same 20,000 lives in 0.16 seconds, not 12. It writes a table that the Python tools
 load without changes.
 
 | | Python | Rust |
 |---|---|---|
-| 20,000 lives | 42.0s | 0.16s |
-| updates per second | 66,000 | 19,300,000 |
-| table | numpy array | `Vec<f64>` |
+| 20,000 lives | 11.7s | 0.16s |
+| updates per second | 238,000 | 19,300,000 |
+| peak memory | 46 MB | 1.9 MB |
+| table | flat list | `Vec<f64>` |
 | dependencies | numpy, Pillow | none |
+
+Both rows come from `/usr/bin/time` on the whole program. The Python memory includes
+the interpreter and its libraries. The Rust memory is the process and nothing else.
+
+Part of that gap used to belong to numpy. The Python agent kept its table in a five
+dimensional array, and numpy spends more time building views than comparing two floats.
+In one harness, with the same seed and the same 20,000 lives, numpy took 39.1 seconds
+and a flat list took 12.1, for the same table bit for bit and the same 32 MB. The
+Python version now uses the list. What is left, 11.7 seconds against 0.16, is the
+language.
 
 The Rust game is the same game. `--trace 400` prints 400 frames.
 `python/parity_trace.py` prints the same 400 frames from the Python side. The two
@@ -330,7 +343,7 @@ generator. The same seed builds different pipes. Fly the same table through the 
 levels, and the results match level for level.
 
 That is the argument for the port. Across 100 seeds, the Rust trainer reaches 71 pipes
-on 8 seeds. The median is 60.5. The sweep takes 19 seconds. In Python it would take 70
+on 8 seeds. The median is 60.5. The sweep takes 19 seconds. In Python it would take 20
 minutes. One run tells you if a seed was lucky. A hundred runs tell you what the
 trainer usually does. `rust/README.md` has the design notes and the crate choices for
 a larger problem.
@@ -362,16 +375,16 @@ change.
 
 | buckets (distance, offset, speed, height) | cells | updates per visited cell | pipes per run | train time |
 |---|---|---|---|---|
-| 6, 10, 5, 10 | 3,000 | 927 | 71.0, every run at the cap | 45s |
-| 6, 19, 5, 19 | 10,830 | 200 | 32.7 | 38s |
-| 6, 37, 5, 37 | 41,070 | 37 | 7.1 | 27s |
+| 6, 10, 5, 10 | 3,000 | 927 | 71.0, every run at the cap | 12s |
+| 6, 19, 5, 19 | 10,830 | 200 | 32.7 | 11s |
+| 6, 37, 5, 37 | 41,070 | 37 | 7.1 | 9s |
 
 At a fixed budget, more buckets make the bird much worse. The middle column explains
 why. A cell that sees 37 updates never settles on a number. The bird then acts on
 noise.
 
 More training can pay for the buckets, up to a point. The 10,830 cell table trained
-for 100,000 lives reaches 71.0 again. It takes 4m34s, not 45s. It catches up but does
+for 100,000 lives reaches 71.0 again. It takes 86s, not 12s. It catches up but does
 not overtake, because the small table already flies to the step cap.
 
 Here is the same comparison past the cap, on eight new levels with a 60,000 step
@@ -379,10 +392,10 @@ limit.
 
 | table | cells | train time | mean pipes | runs that hit the cap |
 |---|---|---|---|---|
-| small | 3,000 | 45s | 1,707.6 | 7 of 8 |
-| fine | 10,830 | 274s | 1,722.8 | 7 of 8 |
+| small | 3,000 | 12s | 1,707.6 | 7 of 8 |
+| fine | 10,830 | 86s | 1,722.8 | 7 of 8 |
 
-That gap is noise. It cost six times the compute.
+That gap is noise. It cost seven times the compute.
 
 A table does not generalise. Every cell learns alone. Bucket 4 and bucket 5 are
 strangers, although they are one pixel apart. More buckets do not add knowledge. They

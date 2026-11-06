@@ -13,8 +13,6 @@ from __future__ import annotations
 import os
 import tempfile
 
-import numpy as np
-
 import env as F
 from agent import QAgent
 
@@ -100,17 +98,17 @@ def main() -> None:
     agent = QAgent(alpha=0.5, gamma=0.9)
     s, s2 = (0, 4, 1, 3), (1, 4, 1, 3)
     agent.update(s, 1, 1.0, s2, done=True)
-    check("terminal update ignores the future", abs(agent.Q[s][1] - 0.5) < 1e-9, f"{agent.Q[s][1]}")
+    check("terminal update ignores the future", abs(agent.scores(s)[1] - 0.5) < 1e-9, f"{agent.scores(s)[1]}")
     agent.update(s, 1, 1.0, s2, done=False)
     expected = 0.5 + 0.5 * (1.0 + 0.9 * 0.0 - 0.5)
     check("bootstrap at gamma 0.9 for an empty next state",
-          abs(agent.Q[s][1] - expected) < 1e-9, f"{agent.Q[s][1]}")
+          abs(agent.scores(s)[1] - expected) < 1e-9, f"{agent.scores(s)[1]}")
 
     # --- persistence round trip -------------------------------------------
     tmp = os.path.join(tempfile.mkdtemp(), "q.json")
     agent.save(tmp)
     back = QAgent.load(tmp)
-    check("save/load is lossless", np.array_equal(agent.Q, back.Q))
+    check("save/load is lossless", agent.q == back.q)
 
     # --- happy path, once --------------------------------------------------
     trained_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "q_table.json")

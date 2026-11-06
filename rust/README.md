@@ -28,22 +28,22 @@ renderers and `watch.py` can play a Rust table without changes.
 
 ## What is different
 
-The physics is a line by line port. The learner uses the same equation. The data
-layout is the only design change.
+The physics is a line by line port. The learner uses the same equation, and the table
+uses the same flat layout, because the Python version adopted it after this comparison.
 
-Python indexes a five dimensional numpy array with a tuple of four numbers. Rust folds
-the four numbers into one integer. The table is a single `Vec<f64>`.
+Both versions fold the four bucket numbers into one offset:
 
 ```
 offset = ((dx * N_DY + dy) * N_VY + vy) * N_Y + y
 ```
 
-The path to one number uses one multiply and add chain and one pointer. The table is a
-48 KB block that stays in cache. The numbers are the same 6,000 numbers.
+Row 2703 holds two floats next to each other. In Rust they sit in one 48 KB `Vec<f64>`.
+In Python they sit in a list of 6,000 floats.
 
-The random number generator is twelve lines of xorshift64*. It replaces the `rand`
-crate. A crate would also work. But a demo that claims no dependencies should have
-none.
+What remains different is the machinery. Rust has no runtime, so there is no
+interpreter and no reference counting. The random number generator is twelve lines of
+xorshift64*. It replaces the `rand` crate. A crate would also work. But a demo that
+claims no dependencies should have none.
 
 ## How the two were checked
 
@@ -72,17 +72,23 @@ Measured on this machine, one core, release build:
 
 | | Python | Rust |
 |---|---|---|
-| 20,000 lives | 42.0 s | 0.16 s |
-| updates per second | 66,000 | 19,300,000 |
-| table | numpy array | `Vec<f64>` |
+| 20,000 lives | 11.7 s | 0.16 s |
+| updates per second | 238,000 | 19,300,000 |
+| peak memory | 46 MB | 1.9 MB |
+| table | flat list | `Vec<f64>` |
 | dependencies | numpy, Pillow | none |
 
-Most of the gap comes from the interpreter. One `env.step()` in Python is a method
-call, a tuple build, and an array lookup. Rust compiles the same step into a few dozen
-instructions. Part of the rest comes from numpy. `self.Q[state].max()` builds a view
-and dispatches through numpy to compare two numbers. That costs more than the
-arithmetic. The last part is layout. A flat index into one contiguous vector stays in
-cache.
+The gap comes from the interpreter. One `env.step()` in Python is a method call, a
+tuple build, a name lookup and a reference count change. Rust compiles the same step
+into a few dozen instructions. The Python loop also allocates, because `act` and
+`update` build small objects on every step, while the Rust loop allocates nothing after
+startup.
+
+numpy is no longer part of this. The Python agent used to keep its table in a five
+dimensional array, and that alone cost 3.2 times: 39.1 seconds against 12.1 in one
+harness, for the same table bit for bit. The cost was building a view on every two
+element lookup, not the arithmetic. With a flat list the Python trainer takes 11.7
+seconds, and the rest of the gap is the language.
 
 This is not a general claim about language speed. One step holds twenty floating point
 operations. Almost all of the cost sits in the overhead around them.
@@ -99,7 +105,7 @@ each.
 | mean | 55.4 |
 | worst | 4.8 |
 
-The whole sweep takes 19 seconds in Rust and about 70 minutes in Python. That
+The whole sweep takes 19 seconds in Rust and about 20 minutes in Python. That
 difference matters. One run tells you if a seed was lucky. A hundred runs tell you what
 the trainer usually does. `q_table_rust.json` is seed 19, the best of that sweep.
 
